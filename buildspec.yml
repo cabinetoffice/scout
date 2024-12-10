@@ -1,0 +1,37 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - echo "Installing dependencies"
+      - pip install --upgrade awscli
+
+  pre_build:
+    commands:
+      - echo "Logging in to Amazon ECR"
+      - aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin $ECR_DOCKER_REGISTRY
+
+  build:
+    commands:
+      - echo "Building a Docker image for backend"
+      - docker build ./backend/Dockerfile -t $ECR_REPOSITORY_BACKEND_URL
+      - echo "Building a Docker image for frontend"
+      - docker build ./frontend/Dockerfile -t $ECR_REPOSITORY_FRONTEND_URL
+
+  post_build:
+    commands:
+      - echo "Build completed on `date`"
+      - echo "Pushing the backend Docker images..."
+      - docker push $ECR_REPOSITORY_BACKEND_URL
+      - echo "Pushing the frontend Docker images..."
+      - docker push $ECR_REPOSITORY_BACKEND_URL
+      - echo "Writing image definitions files..."
+      - printf '[{"name":"plotly-dash","imageUri":"%s:latest"}]' $ECR_REPOSITORY_BACKEND_URL > backend_imagedefinitions.json
+      - printf '[{"name":"plotly-dash","imageUri":"%s:latest"}]' $ECR_REPOSITORY_BACKEND_URL > frontend_imagedefinitions.json
+
+artifacts:
+    files:
+      - backend_imagedefinitions.json
+      - frontend_imagedefinitions.json
+    name: image_definitions
+

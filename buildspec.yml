@@ -14,9 +14,9 @@ phases:
   build:
     commands:
       - echo "Building a Docker image for backend"
-      - docker build -t $ECR_REPOSITORY_BACKEND_URL ./backend
+      - docker build -t $ECR_REPOSITORY_BACKEND_URL -f backend/Dockerfile .
       - echo "Building a Docker image for frontend"
-      - docker build -t $ECR_REPOSITORY_FRONTEND_URL ./frontend
+      - docker build -t $ECR_REPOSITORY_FRONTEND_URL -f frontend/Dockerfile .
 
   post_build:
     commands:

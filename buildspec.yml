@@ -14,9 +14,9 @@ phases:
   build:
     commands:
       - echo "Building a Docker image for backend"
-      - docker build -f ./backend/Dockerfile -t $ECR_REPOSITORY_BACKEND_URL ./backend
+      - docker build -t $ECR_REPOSITORY_BACKEND_URL ./backend
       - echo "Building a Docker image for frontend"
-      - docker build -f ./frontend/Dockerfile -t $ECR_REPOSITORY_FRONTEND_URL ./frontend
+      - docker build -t $ECR_REPOSITORY_FRONTEND_URL ./frontend
 
   post_build:
     commands:
@@ -26,12 +26,16 @@ phases:
       - echo "Pushing the frontend Docker images..."
       - docker push $ECR_REPOSITORY_FRONTEND_URL
       - echo "Writing image definitions files..."
-      - printf '[{"name":"plotly-dash","imageUri":"%s:latest"}]' $ECR_REPOSITORY_BACKEND_URL > backend_imagedefinitions.json
-      - printf '[{"name":"plotly-dash","imageUri":"%s:latest"}]' $ECR_REPOSITORY_FRONTEND_URL > frontend_imagedefinitions.json
+      - printf '[{"name":"scout-backend","imageUri":"%s:latest"}]' $ECR_REPOSITORY_BACKEND_URL > backend_imagedefinitions.json
+      - printf '[{"name":"scout-fronted","imageUri":"%s:latest"}]' $ECR_REPOSITORY_FRONTEND_URL > frontend_imagedefinitions.json
 
 artifacts:
-    files:
-      - backend_imagedefinitions.json
-      - frontend_imagedefinitions.json
-    name: image_definitions
+  files:
+    - backend_imagedefinitions.json
+    - frontend_imagedefinitions.json
+  name: image_definitions
 
+cache:
+  paths:
+    - /root/.cache/pip
+    - /root/.npm

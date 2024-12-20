@@ -10,9 +10,9 @@ class Settings(BaseSettings):
     API_PORT: int = 8080
     APP_PORT: int = 3000
     APP_URL: str = ""
-    APP_NAME: str
-    AWS_ACCOUNT_ID: str
-    AWS_REGION: str
+    APP_NAME: Optional[str] = None
+    AWS_ACCOUNT_ID: Optional[str] = None
+    AWS_REGION: Optional[str] = None
     AZURE_OPENAI_API_VERSION: str
     AZURE_OPENAI_CHAT_DEPLOYMENT_NAME: str
     AZURE_OPENAI_KEY: str

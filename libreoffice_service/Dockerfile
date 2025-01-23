@@ -28,7 +28,7 @@ RUN poetry config virtualenvs.create false
 RUN poetry lock
 
 # Install project dependencies
-RUN poetry install --no-dev --no-interaction --no-ansi
+RUN poetry install --without dev --no-root --no-interaction --no-ansi
 
 # Copy the FastAPI application code
 COPY . /app

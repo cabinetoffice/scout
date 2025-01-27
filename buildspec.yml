@@ -26,8 +26,8 @@ phases:
       - echo "Pushing the frontend Docker image..."
       - docker push $ECR_REPOSITORY_FRONTEND_URL:latest
       - echo "Writing image definitions file for ECS deployment..."
-      - printf '[{"name":"scout-backend","imageUri":"%s"}]' $ECR_REPOSITORY_BACKEND_URL:latest > imagedefinitions.json
-      - printf '[{"name":"scout-frontend","imageUri":"%s"}]' $ECR_REPOSITORY_FRONTEND_URL:latest >> imagedefinitions.json
+      - printf '[{"name":"backend","imageUri":"%s"}]' $ECR_REPOSITORY_BACKEND_URL:latest > imagedefinitions.json
+      - printf '[{"name":"frontend","imageUri":"%s"}]' $ECR_REPOSITORY_FRONTEND_URL:latest >> imagedefinitions.json
 
 artifacts:
   files:

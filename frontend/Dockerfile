@@ -4,14 +4,20 @@ FROM node:20.13.1-alpine@sha256:a7b980c958bfe4d84ee9263badd95a40c8bb50ad5afdb879
 # Set the working directory in the container
 WORKDIR /app
 
+# Copy package files
+COPY package.json package-lock.json ./
+
+# Install dependencies
+RUN npm install --production
+
 # Copy the application code to the working directory
 COPY frontend/ ./
 
-# Install the application dependencies
-RUN npm ci
+# Build the Next.js app
+RUN npm run build
 
 # Expose the port the app runs on
 EXPOSE 3000
 
-# Run the development server
-CMD ["npm", "run", "dev"]
+# Start the Next.js app
+CMD ["npm", "run", "start"]

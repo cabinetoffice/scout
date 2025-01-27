@@ -7,8 +7,8 @@ WORKDIR /app
 # Copy the application code to the working directory
 COPY frontend/ ./
 
-# Build the Next.js app
-RUN npm run build
+# Install the application dependencies
+RUN npm ci
 
 # Expose the port the app runs on
 EXPOSE 3000

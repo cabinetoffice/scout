@@ -9,30 +9,29 @@ phases:
   pre_build:
     commands:
       - echo "Logging in to Amazon ECR"
-      - aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin $ECR_DOCKER_REGISTRY
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
 
   build:
     commands:
       - echo "Building a Docker image for backend"
-      - docker build -t $ECR_REPOSITORY_BACKEND_URL -f backend/Dockerfile .
+      - docker build -t $ECR_REPOSITORY_BACKEND_URL:latest -f backend/Dockerfile .
       - echo "Building a Docker image for frontend"
-      - docker build -t $ECR_REPOSITORY_FRONTEND_URL -f frontend/Dockerfile .
+      - docker build -t $ECR_REPOSITORY_FRONTEND_URL:latest -f frontend/Dockerfile .
 
   post_build:
     commands:
       - echo "Build completed on `date`"
-      - echo "Pushing the backend Docker images..."
-      - docker push $ECR_REPOSITORY_BACKEND_URL
-      - echo "Pushing the frontend Docker images..."
-      - docker push $ECR_REPOSITORY_FRONTEND_URL
-      - echo "Writing image definitions files..."
-      - printf '[{"name":"scout-backend","imageUri":"%s:latest"}]' $ECR_REPOSITORY_BACKEND_URL > backend_imagedefinitions.json
-      - printf '[{"name":"scout-fronted","imageUri":"%s:latest"}]' $ECR_REPOSITORY_FRONTEND_URL > frontend_imagedefinitions.json
+      - echo "Pushing the backend Docker image..."
+      - docker push $ECR_REPOSITORY_BACKEND_URL:latest
+      - echo "Pushing the frontend Docker image..."
+      - docker push $ECR_REPOSITORY_FRONTEND_URL:latest
+      - echo "Writing image definitions file for ECS deployment..."
+      - printf '[{"name":"scout-backend","imageUri":"%s"}]' $ECR_REPOSITORY_BACKEND_URL:latest > imagedefinitions.json
+      - printf '[{"name":"scout-frontend","imageUri":"%s"}]' $ECR_REPOSITORY_FRONTEND_URL:latest >> imagedefinitions.json
 
 artifacts:
   files:
-    - backend_imagedefinitions.json
-    - frontend_imagedefinitions.json
+    - imagedefinitions.json
   name: image_definitions
 
 cache:

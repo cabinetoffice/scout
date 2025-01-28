@@ -10,8 +10,11 @@ COPY frontend/ ./
 # Install the application dependencies
 RUN npm ci
 
+RUN npm run build
+
 # Expose the port the app runs on
 EXPOSE 3000
 
 # Start the Next.js app
-CMD ["npm", "run", "start"]
+# CMD ["npm", "run", "start"]
+CMD ["node", ".next/standalone/server.js"]

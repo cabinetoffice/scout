@@ -1,20 +1,21 @@
-# Use an official Node.js runtime as a parent image
-FROM node:20.13.1-alpine@sha256:a7b980c958bfe4d84ee9263badd95a40c8bb50ad5afdb87902c187fefaef0e24
+FROM node:20.13.1-alpine@sha256:a7b980c958bfe4d84ee9263badd95a40c8bb50ad5afdb87902c187fefaef0e24 AS builder
 
-# Set the working directory in the container
 WORKDIR /app
 
-# Copy the application code to the working directory
-COPY frontend/ ./
+COPY package.json package-lock.json ./
+RUN npm install
 
-# Install the application dependencies
-RUN npm ci
-
+COPY . ./
 RUN npm run build
 
-# Expose the port the app runs on
+FROM builder AS  runner
+
+WORKDIR /app
+
+COPY --from=builder /app/package.json /app/package-lock.json ./
+COPY --from=builder /app/.next /app/.next
+COPY --from=builder /app/public /app/public
+
 EXPOSE 3000
 
-# Start the Next.js app
-# CMD ["npm", "run", "start"]
-CMD ["node", ".next/standalone/server.js"]
+CMD ["npm", "start"]

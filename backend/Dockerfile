@@ -1,5 +1,5 @@
 # Start with the official Python base image
-FROM public.ecr.aws/docker/library/python:3.11
+FROM public.ecr.aws/docker/library/python:3.11-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE 1

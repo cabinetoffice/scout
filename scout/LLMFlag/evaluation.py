@@ -1,11 +1,13 @@
 import os
+import json
 from abc import ABC, abstractmethod
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any
 from uuid import UUID
 
+import boto3
 import regex as re
+from botocore.exceptions import ClientError
 from langchain_core.vectorstores import VectorStore
-from openai import APIConnectionError, APIError, OpenAI, RateLimitError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from scout.DataIngest.models.schemas import Chunk, CriterionCreate, File, ProjectCreate, ResultCreate
@@ -28,21 +30,23 @@ from scout.utils.utils import logger
 @retry(
     stop=stop_after_attempt(10),
     wait=wait_exponential(multiplier=1, min=4, max=10),
-    retry=retry_if_exception_type((RateLimitError, APIConnectionError)),
+    retry=retry_if_exception_type((ClientError,)),
     before_sleep=lambda retry_state: logger.info(f"Retrying in {retry_state.next_action.sleep} seconds..."),
 )
 def api_call_with_retry(func, *args, **kwargs):
     try:
         return func(*args, **kwargs)
-    except RateLimitError:
-        logger.warning("Rate limit reached. Retrying...")
-        raise
-    except APIConnectionError:
-        logger.warning("API connection error. Retrying...")
-        raise
-    except APIError as e:
-        logger.error(f"API error occurred: {str(e)}")
-        raise
+    except ClientError as e:
+        error_code = e.response.get('Error', {}).get('Code')
+        if error_code == 'ThrottlingException':
+            logger.warning("Rate limit reached (ThrottlingException). Retrying...")
+            raise
+        elif error_code == 'ServiceUnavailable':
+            logger.warning("Service unavailable. Retrying...")
+            raise
+        else:
+            logger.error(f"AWS Bedrock API error occurred: {str(e)}")
+            raise
 
 
 class BaseEvaluator(ABC):
@@ -110,23 +114,36 @@ class BaseEvaluator(ABC):
                     extracts_prompt, extracts = self.semantic_search(
                         evidence_item, k=k, filters={"project": str(self.project.id)}
                     )
-                    evidence_response = api_call_with_retry(
-                        self.llm.chat.completions.create,
-                        model=os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"),
-                        messages=[
+                    
+                    # Create a request for Bedrock using Claude's expected format
+                    request_body = {
+                        "anthropic_version": "bedrock-2023-05-31",
+                        "max_tokens": 1000,
+                        "messages": [
                             {
-                                "role": "system",
-                                "content": SYSTEM_EVIDENCE_POINTS_PROMPT,
+                                "role": "assistant",
+                                "content": SYSTEM_EVIDENCE_POINTS_PROMPT
                             },
                             {
                                 "role": "user",
                                 "content": USER_EVIDENCE_POINTS_PROMPT.format(
                                     question=question, extracts=extracts_prompt
-                                ),
-                            },
-                        ],
+                                )
+                            }
+                        ]
+                    }
+                    
+                    # Make the Bedrock API call
+                    evidence_response = api_call_with_retry(
+                        self.llm.invoke_model,
+                        modelId=os.getenv("AWS_BEDROCK_MODEL_ID"),
+                        body=json.dumps(request_body)
                     )
-                    evidence_responses_list.append(evidence_response.choices[0].message.content)
+                    
+                    # Parse the response
+                    response_body = json.loads(evidence_response["body"].read().decode())
+                    message_content = response_body["content"][0]["text"]
+                    evidence_responses_list.append(message_content)
                 evidence_answer_pairs = [
                     f"question: {q} answer: {a}" for q, a in zip(evidence_list, evidence_responses_list)
                 ]
@@ -137,51 +154,60 @@ class BaseEvaluator(ABC):
             extracts_prompt, extracts = self.semantic_search(question, k=k, filters={"project": str(self.project.id)})
             chunks = [self.storage_handler.read_item(UUID(extract.metadata["uuid"]), Chunk) for extract in extracts]
 
+            # Create a request for Bedrock using Claude's expected format
+            request_body = {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 1000,
+                "messages": [
+                    {"role": "user", "content": SYSTEM_QUESTION_PROMPT + "\n\n" +
+                     SYSTEM_HYPOTHESIS_PROMPT.format(hypotheses=self.hypotheses) + "\n\n" +
+                     USER_QUESTION_PROMPT.format(
+                         question=question,
+                         extracts=extracts,
+                         evidence_point_answers=evidence_answer_pairs,
+                     )}
+                ]
+            }
+            
+            # Make the Bedrock API call
             question_response = api_call_with_retry(
-                self.llm.chat.completions.create,
-                model=os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"),
-                messages=[
-                    {"role": "system", "content": SYSTEM_QUESTION_PROMPT},
-                    {
-                        "role": "system",
-                        "content": SYSTEM_HYPOTHESIS_PROMPT.format(hypotheses=self.hypotheses),
-                    },
-                    {
-                        "role": "user",
-                        "content": USER_QUESTION_PROMPT.format(
-                            question=question,
-                            extracts=extracts,
-                            evidence_point_answers=evidence_answer_pairs,
-                        ),
-                    },
-                ],
+                self.llm.invoke_model,
+                modelId=os.getenv("AWS_BEDROCK_MODEL_ID"),
+                body=json.dumps(request_body)
             )
+            
+            # Parse the response
+            response_body = json.loads(question_response["body"].read().decode())
+            answer = response_body["content"][0]["text"]
 
-            answer = question_response.choices[0].message.content
-
+            # Create a request for Bedrock using Claude's expected format
+            hypo_request_body = {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 1000,
+                "messages": [
+                    {"role": "user", "content": CORE_SCOUT_PERSONA + "\n\n" +
+                     USER_REGENERATE_HYPOTHESIS_PROMPT.format(
+                         hypotheses=self.hypotheses,
+                         questions_and_answers=question + answer,
+                     ) + "\n\n" +
+                     USER_QUESTION_PROMPT.format(
+                         question=question,
+                         extracts=extracts,
+                         evidence_point_answers=evidence_answer_pairs,
+                     )}
+                ]
+            }
+            
+            # Make the Bedrock API call
             hypotheses_response = api_call_with_retry(
-                self.llm.chat.completions.create,
-                model=os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"),
-                messages=[
-                    {"role": "system", "content": CORE_SCOUT_PERSONA},
-                    {
-                        "role": "system",
-                        "content": USER_REGENERATE_HYPOTHESIS_PROMPT.format(
-                            hypotheses=self.hypotheses,
-                            questions_and_answers=question + answer,
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": USER_QUESTION_PROMPT.format(
-                            question=question,
-                            extracts=extracts,
-                            evidence_point_answers=evidence_answer_pairs,
-                        ),
-                    },
-                ],
+                self.llm.invoke_model,
+                modelId=os.getenv("AWS_BEDROCK_MODEL_ID"),
+                body=json.dumps(hypo_request_body)
             )
-            self.hypotheses = hypotheses_response.choices[0].message.content
+            
+            # Parse the response
+            hypo_response_body = json.loads(hypotheses_response["body"].read().decode())
+            self.hypotheses = hypo_response_body["content"][0]["text"]
 
             return (answer, chunks)
 
@@ -195,13 +221,22 @@ class MainEvaluator(BaseEvaluator):
         self,
         project: ProjectCreate,
         vector_store: VectorStore,
-        llm: OpenAI,
+        llm: Any,
         storage_handler: BaseStorageHandler,
     ):
         """Initialise the evaluator"""
         self.hypotheses = "None"
         self.vector_store = vector_store
-        self.llm = llm
+        
+        # Initialize Bedrock client if not provided
+        if not hasattr(llm, 'invoke_model'):
+            self.llm = boto3.client(
+                service_name="bedrock-runtime",
+                region_name=os.getenv("AWS_REGION")
+            )
+        else:
+            self.llm = llm
+            
         self.storage_handler = storage_handler
         self.project = project
 
@@ -247,18 +282,29 @@ class MainEvaluator(BaseEvaluator):
         SUMMARIZE_RESPONSES_PROMPT = """You are a project delivery expert, you will be given question and answer pairs about a government project. Return a summary of the most important themes, you do not need to summarise all the questions, only return important, specific information. Be specific about project detail referred to. Return no more than 3 sentences. {qa_pairs}"""
 
         formatted_input = ", ".join([f"Question: {qa[0]}\nAnswer: {qa[1]}" for qa in question_answer_pairs])
-        response = api_call_with_retry(
-            self.llm.chat.completions.create,
-            model=os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"),
-            messages=[
+        
+        # Create a request for Bedrock using Claude's expected format
+        request_body = {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 1000,
+            "messages": [
                 {
                     "role": "user",
-                    "content": SUMMARIZE_RESPONSES_PROMPT.format(qa_pairs=formatted_input),
-                },
-            ],
+                    "content": SUMMARIZE_RESPONSES_PROMPT.format(qa_pairs=formatted_input)
+                }
+            ]
+        }
+        
+        # Make the Bedrock API call
+        response = api_call_with_retry(
+            self.llm.invoke_model,
+            modelId=os.getenv("AWS_BEDROCK_MODEL_ID"),
+            body=json.dumps(request_body)
         )
-
-        return response.choices[0].message.content
+        
+        # Parse the response
+        response_body = json.loads(response["body"].read().decode())
+        return response_body["content"][0]["text"]
 
     def _define_model(self):
         """Define the model that is the evaluator"""

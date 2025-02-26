@@ -8,9 +8,9 @@ See the project README for instructions on how to run.
 """
 
 import os
+import boto3
 
 from dotenv import load_dotenv
-from openai import AzureOpenAI
 
 from scout.DataIngest.models.schemas import CriterionGate
 from scout.DataIngest.utils import get_vector_store_directory
@@ -33,11 +33,10 @@ if __name__ == "__main__":
         ".data/criteria/example_2.csv",
         ".data/criteria/example_3.csv",
     ]
-    llm = AzureOpenAI(
-        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-        api_key=os.getenv("AZURE_OPENAI_KEY"),
-        api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
-        azure_deployment=os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"),
+    # Create Bedrock client for LLM operations
+    llm = boto3.client(
+        service_name="bedrock-runtime",
+        region_name=os.getenv("AWS_REGION")
     )  # Chosen LLM for evaluation of project against the criteria
 
     # Define data stores: Postgres database, vector store, S3 bucket for files

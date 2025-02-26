@@ -1,9 +1,9 @@
 import os
 from pathlib import Path
 
+import boto3
 import pytest
 from langchain_core.vectorstores import VectorStore
-from openai import AzureOpenAI
 
 from scout.Pipelines.utils import get_or_create_vector_store
 
@@ -61,11 +61,9 @@ def reset_database(request, project_directory: Path):
 
 @pytest.fixture
 def llm():
-    llm = AzureOpenAI(
-        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-        api_key=os.getenv("AZURE_OPENAI_KEY"),
-        api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
-        azure_deployment=os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"),
+    llm = boto3.client(
+        service_name="bedrock-runtime",
+        region_name=os.getenv("AWS_REGION")
     )
     return llm
 

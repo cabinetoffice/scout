@@ -42,7 +42,7 @@ The evaluation is done using `MainEvaluator.evaluate_questions`. This evaluates 
 - Does q and a for each evidence point
 - Gets an overall final answer using the answers to the earlier points
 - Returns answer and chunks
-- Answer is `response.choices[0].message.content` from Open AI
+- Answer is extracted from AWS Bedrock response
 - Chunks is a list of `Chunk` objects read from the vector store
 
 The results of the evaluation are saved to Postgres (`result` table).
@@ -93,7 +93,7 @@ graph TD
     CC8[upload_to_s3]
     CC9[Write file metadata to db / storage_handler]
     CC10[Chunk and embed file contents]
-    CC11[Extract structured file info from file content using gpt3.5 and instructor. Max retries = 3 may cause errors to be missed]
+    CC11[Extract structured file info from file content using AWS Bedrock and instructor. Max retries = 3 may cause errors to be missed]
     CC12[Update file in db storage_handler with new file info]
     CC13[Add chunks to vector store]
     end

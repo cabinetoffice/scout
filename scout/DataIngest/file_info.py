@@ -1,8 +1,10 @@
 import os
+import json
 
+import boto3
 import instructor
 from instructor.exceptions import InstructorRetryException
-from openai import AzureOpenAI
+from pydantic.json import pydantic_encoder
 
 from scout.DataIngest.models.schemas import ChunkCreate, File, FileInfo, FileUpdate
 from scout.DataIngest.prompts import FILE_INFO_EXTRACTOR_SYSTEM_PROMPT
@@ -22,35 +24,69 @@ def get_llm_file_info(project_name: str, file_name: str, text: str) -> FileInfo:
     For a given file and text, get LLM generated metadata on file (FileInfo) e.g. name, summary.
     If LLM generated info fails - return blank FileInfo.
     """
-    client = instructor.from_openai(
-        AzureOpenAI(
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            api_key=os.getenv("AZURE_OPENAI_KEY"),
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
-            azure_deployment=os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"),
-        )
+    # Create bedrock client
+    bedrock_client = boto3.client(
+        service_name="bedrock-runtime",
+        region_name=os.getenv("AWS_REGION")
     )
+    
     # Create prompt that will be used to generate file info
     sys_prompt = FILE_INFO_EXTRACTOR_SYSTEM_PROMPT.format(project_name=project_name, file_name=file_name)
-
-    # Extract structured metadata for file from natural language using cheaper LLM
+    
+    # Extract structured metadata for file from natural language using Bedrock
     try:
-        file_info = client.chat.completions.create(
-            model=os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"),
-            response_model=FileInfo,
-            messages=[
-                {
-                    "role": "system",
-                    "content": sys_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": text,
-                },
-            ],
-            max_retries=3,
+        # Create the messages for Claude/Anthropic model format
+        messages = [
+            {"role": "system", "content": sys_prompt},
+            {"role": "user", "content": text}
+        ]
+        
+        # Create a prompt with instructions to output JSON for FileInfo schema
+        schema_instructions = """
+        Return the output as valid JSON with the following structure:
+        {
+            "clean_name": "string",
+            "source": "Government | Supplier | Other",
+            "summary": "string",
+            "published_date": "YYYY-MM-DD string or null"
+        }
+        """
+        
+        # Add instruction for response format
+        messages.append({"role": "user", "content": schema_instructions})
+        
+        # Make the API call to Bedrock with Claude
+        response = bedrock_client.invoke_model(
+            modelId=os.getenv("AWS_BEDROCK_MODEL_ID"),
+            body=json.dumps({
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 1000,
+                "messages": messages
+            })
         )
-    except InstructorRetryException as e:
+        
+        # Parse the response
+        response_body = json.loads(response["body"].read().decode())
+        output_content = response_body["content"][0]["text"]
+        
+        # Extract JSON from the response
+        import re
+        json_match = re.search(r'```json\n(.*?)\n```', output_content, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(1)
+        else:
+            json_str = output_content
+        
+        # Clean up any non-JSON content
+        json_str = json_str.strip()
+        if json_str.startswith('```') and json_str.endswith('```'):
+            json_str = json_str[3:-3].strip()
+        
+        # Parse JSON into FileInfo object
+        file_info_dict = json.loads(json_str)
+        file_info = FileInfo(**file_info_dict)
+        
+    except Exception as e:
         # Assumption that blank info is fine if we can't generate with LLM
         file_info = FileInfo()
         logger.error(f"{e} unable to get LLM generated file info for {file_name}, proceeding without...")

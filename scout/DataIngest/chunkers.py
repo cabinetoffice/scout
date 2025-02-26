@@ -6,11 +6,14 @@ import requests
 from unstructured.chunking.title import chunk_by_title
 from unstructured.documents.elements import Element
 from unstructured.partition.auto import partition
+from unstructured.documents.elements import ElementMetadata
+from unstructured.documents.elements import Text
 
 from scout.DataIngest.anonymizer import Anonymizer
 from scout.DataIngest.models.schemas import ChunkCreate, File
 from scout.utils.utils import logger
 
+import fitz  # PyMuPDF
 
 def download_to_tempfile(presigned_url: str, suffix: Optional[str] = None) -> Path:
     """
@@ -84,26 +87,44 @@ def partition_and_chunk_file(
     # Chunking strategy options: https://docs.unstructured.io/open-source/core-functionality/partitioning#partition
     anonymizer = Anonymizer()
     logger.info(f"Partitioning file from temp file path: {temp_filepath}")
-    elements = partition(filename=temp_filepath, strategy=chunking_strategy)
-    logger.info(f"Finished Partitioning file: {elements}")
 
+    # Extract text using PyMuPDF
+    elements = []
+    try:
+        with fitz.open(temp_filepath) as doc:
+            for page_num, page in enumerate(doc, start=1):
+                text = page.get_text("text").strip()
+                if text:
+                    metadata = ElementMetadata(page_number=page_num)  # Use ElementMetadata class
+                    elements.append(Text(text=text, metadata=metadata))
+
+        logger.info(f"Finished extracting {len(elements)} elements using PyMuPDF.")
+    except Exception as e:
+        logger.error(f"PyMuPDF extraction failed: {str(e)}", exc_info=True)
+        return []
+
+    # Chunk the extracted text
     logger.info(f"Chunking file by title: {elements}")
-    raw_chunks = chunk_by_title(elements=elements, max_characters=2000, new_after_n_chars=1750)
+    raw_chunks = chunk_by_title(
+        elements=elements, max_characters=2000, new_after_n_chars=1750
+    )
     logger.info(f"Finished Chunking file by title: {raw_chunks}")
 
+    # Apply anonymization if enabled
     if anonymise:
         logger.info("Anonymizing chunks")
         for raw_chunk in raw_chunks:
             raw_chunk.text = anonymizer.anonymize(raw_chunk.text).text
         logger.info("Finished Anonymizing chunks")
 
+    # Process chunks
     logger.info(f"Processing chunks by title: {raw_chunks}")
     chunks = process_chunks(file=file, raw_chunks=raw_chunks)
     logger.info(f"Finished Processing chunks by title: {chunks}")
 
-    temp_filepath.unlink(missing_ok=True)
+    # Remove temporary file
+    Path(temp_filepath).unlink(missing_ok=True)
     return chunks
-
 
 def add_chunks_to_vector_store(chunks: List[ChunkCreate], project_id, vector_store) -> None:
     """Takes a list of Chunks and embeds them into the vector store

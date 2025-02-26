@@ -1,8 +1,8 @@
-from typing import List
+from typing import List, Any
 
+import boto3
 from langchain_community.vectorstores import Chroma
 from langchain_core.vectorstores import VectorStore
-from openai import AzureOpenAI
 
 from scout.DataIngest.models.schemas import (
     Criterion,
@@ -28,9 +28,17 @@ def evaluate_questions_for_project(
     project: ProjectCreate,
     storage_handler: PostgresStorageHandler,
     criteria: List[CriterionCreate],
-    llm: AzureOpenAI,
+    llm: Any = None,
     vector_store: Chroma = None,
 ) -> List[ResultCreate]:
+    # If llm is not provided, create a Bedrock client
+    if llm is None:
+        import os
+        llm = boto3.client(
+            service_name="bedrock-runtime",
+            region_name=os.getenv("AWS_REGION")
+        )
+    
     evaluator = MainEvaluator(
         project=project,
         vector_store=vector_store,
@@ -44,9 +52,9 @@ def evaluate_questions_for_project(
 def generate_llm_flags_for_project(
     project_name: str,
     storage_handler: PostgresStorageHandler,
-    llm: AzureOpenAI,
-    vector_store: VectorStore,
-    gate_review: CriterionGate,
+    llm: Any = None,
+    vector_store: VectorStore = None,
+    gate_review: CriterionGate = None,
 ):
     """
     For a given project, use an LLM to determine if the project meets the criteria
@@ -55,6 +63,14 @@ def generate_llm_flags_for_project(
     """
     filter = ProjectFilter(name=project_name)
     project = storage_handler.get_item_by_attribute(filter)[-1]
+
+    # If llm is not provided, create a Bedrock client
+    if llm is None:
+        import os
+        llm = boto3.client(
+            service_name="bedrock-runtime",
+            region_name=os.getenv("AWS_REGION")
+        )
 
     criteria = get_criteria_for_gate(gate_review=gate_review, storage_handler=storage_handler)
     logger.info(f"{len(criteria)} criteria loaded")

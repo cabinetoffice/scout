@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     APP_NAME: Optional[str] = None
     AWS_ACCOUNT_ID: Optional[str] = None
     AWS_REGION: Optional[str] = None
+    AWS_BEDROCK_MODEL_ID: str
     AZURE_OPENAI_API_VERSION: str
     AZURE_OPENAI_CHAT_DEPLOYMENT_NAME: str
     AZURE_OPENAI_KEY: str

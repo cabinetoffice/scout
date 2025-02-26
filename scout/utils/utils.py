@@ -150,46 +150,74 @@ def init_session_state(
             logger.info("Minio S3 storage handler initialized")
 
     if "llm" not in dir(session_state) and not deploy_mode:
-        session_state.llm = AzureOpenAI(
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            api_key=os.getenv("AZURE_OPENAI_KEY"),
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
-            azure_deployment=os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"),
+        import boto3
+        from langchain_aws import BedrockChat
+
+        bedrock_client = boto3.client(
+            service_name="bedrock-runtime",
+            region_name=os.getenv("AWS_REGION")
         )
-        logger.info("Azure OpenAI LLM initialized")
+        
+        session_state.llm = BedrockChat(
+            client=bedrock_client,
+            model_id=os.getenv("AWS_BEDROCK_MODEL_ID")
+        )
+        logger.info("AWS Bedrock LLM initialized")
 
     if "llm_summarizer" not in dir(session_state) and not deploy_mode:
-        session_state.llm_summarizer = AzureChatOpenAI(
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            api_key=os.getenv("AZURE_OPENAI_KEY"),
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
-            azure_deployment="gpt-35-turbo-16k",
+        import boto3
+        from langchain_aws import BedrockChat
+
+        if "bedrock_client" not in locals():
+            bedrock_client = boto3.client(
+                service_name="bedrock-runtime",
+                region_name=os.getenv("AWS_REGION")
+            )
+        
+        session_state.llm_summarizer = BedrockChat(
+            client=bedrock_client,
+            model_id=os.getenv("AWS_BEDROCK_MODEL_ID")
         )
-        logger.info("Azure OpenAI summarizer initialized")
+        logger.info("AWS Bedrock summarizer initialized")
 
     if "embedding_function" not in dir(session_state) and not deploy_mode:
         try:
-            session_state.embedding_function = AzureOpenAIEmbeddings(
-                azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-                api_key=os.getenv("AZURE_OPENAI_KEY"),
-                api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
-                azure_deployment="text-embedding-3-large",
+            from langchain_aws import BedrockEmbeddings
+            
+            if "bedrock_client" not in locals():
+                import boto3
+                bedrock_client = boto3.client(
+                    service_name="bedrock-runtime",
+                    region_name=os.getenv("AWS_REGION")
+                )
+            
+            session_state.embedding_function = BedrockEmbeddings(
+                client=bedrock_client,
+                model_id="amazon.titan-embed-text-v1"
             )
-            logger.info("Azure OpenAI embeddings initialized")
+            logger.info("AWS Bedrock embeddings initialized")
         except Exception as e:
-            logger.error(f"Error initializing AzureOpenAIEmbeddings: {e}")
+            logger.error(f"Error initializing BedrockEmbeddings: {e}")
             raise
 
     if "topic_embedding_function" not in dir(session_state) and not deploy_mode:
         try:
-            session_state.topic_embedding_function = AzureOpenAIEmbeddings(
-                azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-                api_key=os.getenv("AZURE_OPENAI_KEY"),
-                api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
-                azure_deployment="text-embedding-ada-002",
+            from langchain_aws import BedrockEmbeddings
+            
+            if "bedrock_client" not in locals():
+                import boto3
+                bedrock_client = boto3.client(
+                    service_name="bedrock-runtime",
+                    region_name=os.getenv("AWS_REGION")
+                )
+            
+            session_state.topic_embedding_function = BedrockEmbeddings(
+                client=bedrock_client,
+                model_id="amazon.titan-embed-text-v1"
             )
+            logger.info("AWS Bedrock topic embeddings initialized")
         except Exception as e:
-            print(f"Error initializing AzureOpenAIEmbeddings: {e}")
+            logger.error(f"Error initializing BedrockEmbeddings for topics: {e}")
             raise
 
     if "vector_store" not in dir(session_state) and not deploy_mode:

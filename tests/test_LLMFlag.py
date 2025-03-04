@@ -1,7 +1,6 @@
 from unittest.mock import patch
 
 from langchain_core.vectorstores import VectorStore
-from openai import AzureOpenAI
 
 from scout.DataIngest.models.schemas import CriterionGate
 from scout.Pipelines.generate_llm_flags import generate_llm_flags_for_project
@@ -19,7 +18,7 @@ def test_llm_flag_one_project(
     example_vector_store: VectorStore,
     criteria_csv_list: list[str],
     connection_string: str,
-    llm: AzureOpenAI,
+    llm,
 ) -> None:
     storage_handler = PostgresStorageHandler()
     s3_storage_handler = S3StorageHandler()

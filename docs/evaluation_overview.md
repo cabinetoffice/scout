@@ -26,7 +26,7 @@ graph TD
     W --> X[Generate final answer using LLM]
     X --> Y[Update hypotheses]
     
-    Z[LLM Interactions] --> AA[Azure OpenAI API calls]
+    Z[LLM Interactions] --> AA[AWS Bedrock API calls]
     AA --> AB[Generate responses for evidence, questions, and hypotheses]
     
     AC[File Processing] --> AD[chunk_save_embed_file<br/>Process and embed file chunks]

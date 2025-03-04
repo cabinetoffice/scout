@@ -17,7 +17,7 @@ graph TD
     K --> L[Write file metadata to PostgreSQL]
     L --> M[Chunk file]
     M --> |Using FileChunker| N[Generate file info using LLM]
-    N --> |Use Azure OpenAI| O[Add chunks to vector store]
+    N --> |Use AWS Bedrock| O[Add chunks to vector store]
     O --> |Use Chroma| P[Process next file]
     P -- More files --> G
     P -- No more files --> Q[End]
@@ -45,7 +45,7 @@ graph TD
     O --> T
 
     subgraph "External Services"
-        U[Azure OpenAI]
+        U[AWS Bedrock]
         V[LibreOffice Container]
     end
 

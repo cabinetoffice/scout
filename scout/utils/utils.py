@@ -9,11 +9,8 @@ from typing import List, Tuple
 import dotenv
 from langchain_community.llms.sagemaker_endpoint import LLMContentHandler
 from langchain_community.vectorstores import Chroma
-from langchain_openai import AzureChatOpenAI
-from langchain_openai import AzureOpenAIEmbeddings
-from openai import APIConnectionError
-from openai import AzureOpenAI
-from openai import RateLimitError
+from langchain_aws import BedrockChat, BedrockEmbeddings
+from botocore.exceptions import ClientError
 from tenacity import retry
 from tenacity import retry_if_exception_type
 from tenacity import stop_after_attempt
@@ -70,7 +67,7 @@ def api_call_with_retry(max_attempts=10, min_wait=4, max_wait=10):
     return retry(
         stop=stop_after_attempt(max_attempts),
         wait=wait_exponential(multiplier=1, min=min_wait, max=max_wait),
-        retry=retry_if_exception_type((RateLimitError, APIConnectionError)),
+        retry=retry_if_exception_type((ClientError,)),
         before_sleep=lambda retry_state: logger.info(f"Retrying in {retry_state.next_action.sleep} seconds..."),
     )
 
@@ -184,6 +181,7 @@ def init_session_state(
         try:
             from langchain_aws import BedrockEmbeddings
             
+            # Use AWS Bedrock for embeddings
             if "bedrock_client" not in locals():
                 import boto3
                 bedrock_client = boto3.client(
@@ -193,17 +191,18 @@ def init_session_state(
             
             session_state.embedding_function = BedrockEmbeddings(
                 client=bedrock_client,
-                model_id="amazon.titan-embed-text-v1"
+                model_id=os.getenv("AWS_BEDROCK_EMBEDDING_MODEL_ID")
             )
             logger.info("AWS Bedrock embeddings initialized")
         except Exception as e:
-            logger.error(f"Error initializing BedrockEmbeddings: {e}")
+            logger.error(f"Error initializing embeddings: {e}")
             raise
 
     if "topic_embedding_function" not in dir(session_state) and not deploy_mode:
         try:
             from langchain_aws import BedrockEmbeddings
             
+            # Use AWS Bedrock for topic embeddings
             if "bedrock_client" not in locals():
                 import boto3
                 bedrock_client = boto3.client(
@@ -213,16 +212,29 @@ def init_session_state(
             
             session_state.topic_embedding_function = BedrockEmbeddings(
                 client=bedrock_client,
-                model_id="amazon.titan-embed-text-v1"
+                model_id=os.getenv("AWS_BEDROCK_EMBEDDING_MODEL_ID")
             )
             logger.info("AWS Bedrock topic embeddings initialized")
         except Exception as e:
-            logger.error(f"Error initializing BedrockEmbeddings for topics: {e}")
+            logger.error(f"Error initializing embeddings for topics: {e}")
             raise
 
     if "vector_store" not in dir(session_state) and not deploy_mode:
         persist_directory = os.path.join(session_state.persistency_folder_path, "VectorStore")
 
+        # Check if an existing vector store exists and handle dimension mismatch
+        if os.path.exists(persist_directory) and os.path.isdir(persist_directory):
+            import shutil
+            
+            logger.warning(
+                "Existing vector store found. Recreating with new embedding model to avoid dimension mismatch. "
+                "This will delete your existing embeddings!"
+            )
+            
+            # Remove the existing vector store directory
+            shutil.rmtree(persist_directory)
+        
+        # Create directory
         if not os.path.exists(persist_directory):
             os.makedirs(persist_directory)
 

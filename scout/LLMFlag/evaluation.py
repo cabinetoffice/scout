@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError
 from langchain_core.vectorstores import VectorStore
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from scout.DataIngest.models.schemas import Chunk, CriterionCreate, File, ProjectCreate, ResultCreate
+from scout.DataIngest.models.schemas import Chunk, ChunkBase, ChunkCreate, CriterionCreate, File, ProjectCreate, ResultCreate
 from scout.LLMFlag.prompts import (
     CORE_SCOUT_PERSONA,
     DOCUMENT_EXTRACT_PROMPT,
@@ -31,7 +31,8 @@ from scout.utils.utils import logger
     stop=stop_after_attempt(10),
     wait=wait_exponential(multiplier=1, min=4, max=10),
     retry=retry_if_exception_type((ClientError,)),
-    before_sleep=lambda retry_state: logger.info(f"Retrying in {retry_state.next_action.sleep} seconds..."),
+    before_sleep=lambda retry_state: logger.info(
+        f"Retrying in {retry_state.next_action.sleep} seconds..."),
 )
 def api_call_with_retry(func, *args, **kwargs):
     try:
@@ -39,7 +40,8 @@ def api_call_with_retry(func, *args, **kwargs):
     except ClientError as e:
         error_code = e.response.get('Error', {}).get('Code')
         if error_code == 'ThrottlingException':
-            logger.warning("Rate limit reached (ThrottlingException). Retrying...")
+            logger.warning(
+                "Rate limit reached (ThrottlingException). Retrying...")
             raise
         elif error_code == 'ServiceUnavailable':
             logger.warning("Service unavailable. Retrying...")
@@ -78,7 +80,8 @@ class BaseEvaluator(ABC):
 
         # get files for metadata
         files = [
-            self.storage_handler.read_item(object_id=UUID(extract.metadata["parent_doc_uuid"]), model=File)
+            self.storage_handler.read_item(object_id=UUID(
+                extract.metadata["parent_doc_uuid"]), model=File)
             for extract in extracts
         ]
 
@@ -108,13 +111,15 @@ class BaseEvaluator(ABC):
         try:
             # do q and a for each evidence point
             if evidence:
-                evidence_list = [item for item in evidence.split("_") if len(item) >= 5]
+                evidence_list = [
+                    item for item in evidence.split("_") if len(item) >= 5]
                 evidence_responses_list = []
                 for evidence_item in evidence_list:
                     extracts_prompt, extracts = self.semantic_search(
-                        evidence_item, k=k, filters={"project": str(self.project.id)}
+                        evidence_item, k=k, filters={
+                            "project": str(self.project.id)}
                     )
-                    
+
                     # Create a request for Bedrock using Claude's expected format
                     request_body = {
                         "anthropic_version": "bedrock-2023-05-31",
@@ -132,17 +137,19 @@ class BaseEvaluator(ABC):
                             }
                         ]
                     }
-                    
+
                     # Make the Bedrock API call
                     evidence_response = api_call_with_retry(
                         self.llm.invoke_model,
                         modelId=os.getenv("AWS_BEDROCK_MODEL_ID"),
                         body=json.dumps(request_body)
                     )
-                    
+
                     # Parse the response
-                    response_body = json.loads(evidence_response["body"].read().decode())
+                    response_body = json.loads(
+                        evidence_response["body"].read().decode())
                     message_content = response_body["content"][0]["text"]
+
                     evidence_responses_list.append(message_content)
                 evidence_answer_pairs = [
                     f"question: {q} answer: {a}" for q, a in zip(evidence_list, evidence_responses_list)
@@ -151,8 +158,9 @@ class BaseEvaluator(ABC):
                 evidence_answer_pairs = "None"
 
             # get an overall final answer using the answers to the earlier points
-            extracts_prompt, extracts = self.semantic_search(question, k=k, filters={"project": str(self.project.id)})
-            chunks = [self.storage_handler.read_item(UUID(extract.metadata["uuid"]), Chunk) for extract in extracts]
+            extracts_prompt, extracts = self.semantic_search(
+                question, k=k, filters={"project": str(self.project.id)})
+            chunks = [extract['metadata']['uuid'] for extract in extracts]
 
             # Create a request for Bedrock using Claude's expected format
             request_body = {
@@ -168,16 +176,15 @@ class BaseEvaluator(ABC):
                      )}
                 ]
             }
-            
             # Make the Bedrock API call
             question_response = api_call_with_retry(
                 self.llm.invoke_model,
                 modelId=os.getenv("AWS_BEDROCK_MODEL_ID"),
                 body=json.dumps(request_body)
             )
-            
             # Parse the response
-            response_body = json.loads(question_response["body"].read().decode())
+            response_body = json.loads(
+                question_response["body"].read().decode())
             answer = response_body["content"][0]["text"]
 
             # Create a request for Bedrock using Claude's expected format
@@ -197,16 +204,17 @@ class BaseEvaluator(ABC):
                      )}
                 ]
             }
-            
+
             # Make the Bedrock API call
             hypotheses_response = api_call_with_retry(
                 self.llm.invoke_model,
                 modelId=os.getenv("AWS_BEDROCK_MODEL_ID"),
                 body=json.dumps(hypo_request_body)
             )
-            
+
             # Parse the response
-            hypo_response_body = json.loads(hypotheses_response["body"].read().decode())
+            hypo_response_body = json.loads(
+                hypotheses_response["body"].read().decode())
             self.hypotheses = hypo_response_body["content"][0]["text"]
 
             return (answer, chunks)
@@ -227,7 +235,7 @@ class MainEvaluator(BaseEvaluator):
         """Initialise the evaluator"""
         self.hypotheses = "None"
         self.vector_store = vector_store
-        
+
         # Initialize Bedrock client if not provided
         if not hasattr(llm, 'invoke_model'):
             self.llm = boto3.client(
@@ -236,7 +244,7 @@ class MainEvaluator(BaseEvaluator):
             )
         else:
             self.llm = llm
-            
+
         self.storage_handler = storage_handler
         self.project = project
 
@@ -245,12 +253,24 @@ class MainEvaluator(BaseEvaluator):
     def evaluate_question(self, criterion: CriterionCreate, k: int = 3, save: bool = False) -> ResultCreate:
         """Get answers to a single question"""
         model_output = self.model(criterion=criterion)
+
+        chunks_list = [
+            self.storage_handler.read_item(uuid, Chunk) or ChunkBase(
+                id=uuid,
+                idx=0,
+                text="Unknown",
+                page_num=0,
+                created_datetime="2024-01-01T00:00:00Z",
+                updated_datetime="2024-01-01T00:00:00Z"
+            )
+            for uuid in model_output[2]
+        ]
         result = ResultCreate(
             criterion=criterion,
             project=self.project,
             answer=model_output[0],
             full_text=model_output[1],
-            chunks=model_output[2],
+            chunks=chunks_list,
         )
 
         if save:
@@ -266,7 +286,8 @@ class MainEvaluator(BaseEvaluator):
         for idx, criterion in enumerate(criteria):
             result = self.evaluate_question(criterion, k, save)
             results.append(result)
-            question_answer_pairs.append((criterion.question, result.full_text))
+            question_answer_pairs.append(
+                (criterion.question, result.full_text))
             if idx % 5 == 0:
                 logger.info(f"{idx} criteria complete")
         logger.info("Generating summary of answers...")
@@ -281,8 +302,9 @@ class MainEvaluator(BaseEvaluator):
 
         SUMMARIZE_RESPONSES_PROMPT = """You are a project delivery expert, you will be given question and answer pairs about a government project. Return a summary of the most important themes, you do not need to summarise all the questions, only return important, specific information. Be specific about project detail referred to. Return no more than 3 sentences. {qa_pairs}"""
 
-        formatted_input = ", ".join([f"Question: {qa[0]}\nAnswer: {qa[1]}" for qa in question_answer_pairs])
-        
+        formatted_input = ", ".join(
+            [f"Question: {qa[0]}\nAnswer: {qa[1]}" for qa in question_answer_pairs])
+
         # Create a request for Bedrock using Claude's expected format
         request_body = {
             "anthropic_version": "bedrock-2023-05-31",
@@ -294,14 +316,14 @@ class MainEvaluator(BaseEvaluator):
                 }
             ]
         }
-        
+
         # Make the Bedrock API call
         response = api_call_with_retry(
             self.llm.invoke_model,
             modelId=os.getenv("AWS_BEDROCK_MODEL_ID"),
             body=json.dumps(request_body)
         )
-        
+
         # Parse the response
         response_body = json.loads(response["body"].read().decode())
         return response_body["content"][0]["text"]
@@ -316,17 +338,19 @@ class MainEvaluator(BaseEvaluator):
                 k=k,
             )
 
-            extracted_words = re.findall(r"\b(positive|neutral|negative)\b", full_text, re.IGNORECASE)
+            # Find words within brackets and standalone words
+            extracted_words = re.findall(
+                r"\[(positive|neutral|negative)\]|\b(positive|neutral|negative)\b", full_text, re.IGNORECASE)
 
             if extracted_words:
-                answer = extracted_words[-1].title()
-                # Remove the key words and brackets from full_text
+                # Extract the last occurrence, regardless of format
+                last_match = [
+                    match for tup in extracted_words for match in tup if match]
+                answer = last_match[-1].title()
+
+                # Remove occurrences of words and brackets
                 full_text = re.sub(
-                    r"\b(positive|neutral|negative)\b",
-                    "",
-                    full_text,
-                    flags=re.IGNORECASE,
-                ).strip()
+                    r"\[?(positive|neutral|negative)\]?", "", full_text, flags=re.IGNORECASE).strip()
             else:
                 answer = "None"
 

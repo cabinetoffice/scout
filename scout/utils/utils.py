@@ -238,6 +238,18 @@ def init_session_state(
             # Remove the existing vector store directory
             shutil.rmtree(persist_directory)
 
+        # Check if an existing vector store exists and handle dimension mismatch
+        if os.path.exists(persist_directory) and os.path.isdir(persist_directory):
+            import shutil
+            
+            logger.warning(
+                "Existing vector store found. Recreating with new embedding model to avoid dimension mismatch. "
+                "This will delete your existing embeddings!"
+            )
+            
+            # Remove the existing vector store directory
+            shutil.rmtree(persist_directory)
+            
         # Create directory
         if not os.path.exists(persist_directory):
             os.makedirs(persist_directory)

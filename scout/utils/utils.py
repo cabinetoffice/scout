@@ -9,7 +9,7 @@ from typing import List, Tuple
 import dotenv
 from langchain_community.llms.sagemaker_endpoint import LLMContentHandler
 from langchain_community.vectorstores import Chroma
-from langchain_aws import BedrockChat, BedrockEmbeddings
+from langchain_aws import ChatBedrock, BedrockEmbeddings
 from botocore.exceptions import ClientError
 from tenacity import retry
 from tenacity import retry_if_exception_type
@@ -68,7 +68,8 @@ def api_call_with_retry(max_attempts=10, min_wait=4, max_wait=10):
         stop=stop_after_attempt(max_attempts),
         wait=wait_exponential(multiplier=1, min=min_wait, max=max_wait),
         retry=retry_if_exception_type((ClientError,)),
-        before_sleep=lambda retry_state: logger.info(f"Retrying in {retry_state.next_action.sleep} seconds..."),
+        before_sleep=lambda retry_state: logger.info(
+            f"Retrying in {retry_state.next_action.sleep} seconds..."),
     )
 
 
@@ -115,7 +116,8 @@ def init_session_state(
 
     if "persistency_folder_path" not in dir(session_state) and not deploy_mode:
         if persistency_folder_path is not None:
-            session_state.persistency_folder_path = pathlib.Path(".data/db" + "_" + persistency_folder_path)
+            session_state.persistency_folder_path = pathlib.Path(
+                ".data/db" + "_" + persistency_folder_path)
         else:
             session_state.persistency_folder_path = pathlib.Path(".data/db")
         if not os.path.exists(session_state.persistency_folder_path):
@@ -127,7 +129,8 @@ def init_session_state(
     logger.info("Initializing session state")
 
     if "storage_handler" not in dir(session_state):
-        session_state.storage_handler = SQLiteStorageHandler(session_state.persistency_folder_path / "main.db")
+        session_state.storage_handler = SQLiteStorageHandler(
+            session_state.persistency_folder_path / "main.db")
         logger.info("SQLite storage handler initialized")
 
     if "s3_storage_handler" not in dir(session_state):
@@ -148,14 +151,14 @@ def init_session_state(
 
     if "llm" not in dir(session_state) and not deploy_mode:
         import boto3
-        from langchain_aws import BedrockChat
+        from langchain_aws import ChatBedrock
 
         bedrock_client = boto3.client(
             service_name="bedrock-runtime",
             region_name=os.getenv("AWS_REGION")
         )
-        
-        session_state.llm = BedrockChat(
+
+        session_state.llm = ChatBedrock(
             client=bedrock_client,
             model_id=os.getenv("AWS_BEDROCK_MODEL_ID")
         )
@@ -163,15 +166,15 @@ def init_session_state(
 
     if "llm_summarizer" not in dir(session_state) and not deploy_mode:
         import boto3
-        from langchain_aws import BedrockChat
+        from langchain_aws import ChatBedrock
 
         if "bedrock_client" not in locals():
             bedrock_client = boto3.client(
                 service_name="bedrock-runtime",
                 region_name=os.getenv("AWS_REGION")
             )
-        
-        session_state.llm_summarizer = BedrockChat(
+
+        session_state.llm_summarizer = ChatBedrock(
             client=bedrock_client,
             model_id=os.getenv("AWS_BEDROCK_MODEL_ID")
         )
@@ -180,7 +183,7 @@ def init_session_state(
     if "embedding_function" not in dir(session_state) and not deploy_mode:
         try:
             from langchain_aws import BedrockEmbeddings
-            
+
             # Use AWS Bedrock for embeddings
             if "bedrock_client" not in locals():
                 import boto3
@@ -188,7 +191,7 @@ def init_session_state(
                     service_name="bedrock-runtime",
                     region_name=os.getenv("AWS_REGION")
                 )
-            
+
             session_state.embedding_function = BedrockEmbeddings(
                 client=bedrock_client,
                 model_id=os.getenv("AWS_BEDROCK_EMBEDDING_MODEL_ID")
@@ -201,7 +204,7 @@ def init_session_state(
     if "topic_embedding_function" not in dir(session_state) and not deploy_mode:
         try:
             from langchain_aws import BedrockEmbeddings
-            
+
             # Use AWS Bedrock for topic embeddings
             if "bedrock_client" not in locals():
                 import boto3
@@ -209,7 +212,7 @@ def init_session_state(
                     service_name="bedrock-runtime",
                     region_name=os.getenv("AWS_REGION")
                 )
-            
+
             session_state.topic_embedding_function = BedrockEmbeddings(
                 client=bedrock_client,
                 model_id=os.getenv("AWS_BEDROCK_EMBEDDING_MODEL_ID")
@@ -220,7 +223,20 @@ def init_session_state(
             raise
 
     if "vector_store" not in dir(session_state) and not deploy_mode:
-        persist_directory = os.path.join(session_state.persistency_folder_path, "VectorStore")
+        persist_directory = os.path.join(
+            session_state.persistency_folder_path, "VectorStore")
+
+        # Check if an existing vector store exists and handle dimension mismatch
+        if os.path.exists(persist_directory) and os.path.isdir(persist_directory):
+            import shutil
+
+            logger.warning(
+                "Existing vector store found. Recreating with new embedding model to avoid dimension mismatch. "
+                "This will delete your existing embeddings!"
+            )
+
+            # Remove the existing vector store directory
+            shutil.rmtree(persist_directory)
 
         # Check if an existing vector store exists and handle dimension mismatch
         if os.path.exists(persist_directory) and os.path.isdir(persist_directory):
@@ -233,7 +249,7 @@ def init_session_state(
             
             # Remove the existing vector store directory
             shutil.rmtree(persist_directory)
-        
+            
         # Create directory
         if not os.path.exists(persist_directory):
             os.makedirs(persist_directory)
@@ -267,16 +283,19 @@ def check_table_rows(connection_string: str, expected_counts: Dict[str, int]) ->
         for table_name, expected_count in expected_counts.items():
             try:
                 # Get actual row count
-                actual_count = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
+                actual_count = conn.execute(
+                    text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
 
                 # Check if count is correct
                 passed = actual_count == expected_count
 
-                results.append((table_name, passed, actual_count, expected_count))
+                results.append(
+                    (table_name, passed, actual_count, expected_count))
 
                 # Print result
                 status = "PASSED" if passed else "FAILED"
-                print(f"{table_name}: {status} (Expected: {expected_count}, Actual: {actual_count})")
+                print(
+                    f"{table_name}: {status} (Expected: {expected_count}, Actual: {actual_count})")
 
             except Exception as e:
                 print(f"Error checking {table_name}: {str(e)}")

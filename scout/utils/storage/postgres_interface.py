@@ -4,6 +4,9 @@ from uuid import UUID
 from decorator import contextmanager
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
+from sqlalchemy import select, insert
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from scout.DataIngest.models.schemas import Chunk as PyChunk
 from scout.DataIngest.models.schemas import ChunkCreate
@@ -387,6 +390,7 @@ def _get_or_create_result(
     existing_item = db.query(sq_model).filter_by(answer=model.answer, full_text=model.full_text).first()
     if existing_item:
         return PyResult.model_validate(existing_item)
+    
     item_to_add = sq_model(
         answer=model.answer,
         full_text=model.full_text,
@@ -396,12 +400,35 @@ def _get_or_create_result(
     db.add(item_to_add)
     db.commit()
     db.flush()  # Refresh created item to add ID to it
-
+    
     for chunk in model.chunks:
         existing_chunk: SqChunk | None = db.query(SqChunk).get(chunk.id)
-        db.execute(result_chunks.insert().values(chunk_id=existing_chunk.id, result_id=item_to_add.id))
-        db.commit()
-
+        
+        # Check if the entry already exists before inserting
+        existing_result_chunk = db.execute(
+            select(result_chunks).where(
+                result_chunks.c.chunk_id == existing_chunk.id,
+                result_chunks.c.result_id == item_to_add.id
+            )
+        ).scalar_one_or_none()
+        
+        if existing_result_chunk is None:
+            try:
+                db.execute(
+                    insert(result_chunks).values(
+                        chunk_id=existing_chunk.id, result_id=item_to_add.id
+                    )
+                )
+                db.commit()
+            except IntegrityError as e:
+                db.rollback()
+                print("IntegrityError during insertion:", e)
+                # Ignore only if the error is due to a duplicate key violation
+                if "duplicate key value violates unique constraint" not in str(e):
+                    raise
+        else:
+            print("result_chunks already exists, not adding")
+    
     db.flush()
     return PyResult.model_validate(item_to_add)
 

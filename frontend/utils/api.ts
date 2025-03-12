@@ -1,102 +1,164 @@
+import { signOut } from "next-auth/react";
+
 interface Filters {
-    model: string;
-    filters: Record<string, any>;
+  model: string;
+  filters: Record<string, any>;
 }
 
 export async function fetchAPIInfo() {
-    const res = await fetch(`/api/info`);
-    if (!res.ok) {
-        throw new Error('Failed to fetch data');
-    }
-    const data = await res.json();
-    return data.backend
+  const res = await fetch(`/api/info`);
+  if (!res.ok) {
+    throw new Error("Failed to fetch data");
+  }
+  const data = await res.json();
+  return data.backend;
 }
 
 export const fetchUser = async () => {
-    const res = await fetch(`/api/user`)
-    if (res.ok) {
-        const resJSON = await res.json()
-        const result = resJSON.response
-        if (result) {
-            return result
-        }
+  const res = await fetch(`/api/user`);
+  if (res.ok) {
+    const resJSON = await res.json();
+    const result = resJSON.response;
+    if (result) {
+      return result;
     }
-    throw new Error('Service unavailable')
-}
-
-export const fetchReadItemsByAttribute = async (filters: Filters): Promise<any> => {
-    const response = await fetch(`/api/read_items_by_attribute`, {
-        method: 'POST',
-        body: JSON.stringify(filters),
-    });
-    if (!response.ok) throw new Error('Failed to read items by attribute');
-    return response.json();
+  }
+  throw new Error("Service unavailable");
 };
 
-
-export const fetchItems = async (table: string, uuid?: string): Promise<any> => {
-    let url = `/api/item/${table}`;
-    if (uuid) url += `?uuid=${encodeURIComponent(uuid)}`;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch items');
-    return response.json();
+export const fetchReadItemsByAttribute = async (
+  filters: Filters
+): Promise<any> => {
+  const response = await fetch(`/api/read_items_by_attribute`, {
+    method: "POST",
+    body: JSON.stringify(filters),
+  });
+  if (!response.ok) throw new Error("Failed to read items by attribute");
+  return response.json();
 };
 
-
-export const fetchRelatedItems = async (uuid: string, model1: string, model2: string, limit_to_user: boolean): Promise<any> => {
-    const response = await fetch(`/api/related/${uuid}/${model1}/${model2}?limit_to_user=${limit_to_user}`);
-    if (!response.ok) throw new Error('Failed to fetch related items');
-    return response.json();
+export const fetchItems = async (
+  table: string,
+  uuid?: string
+): Promise<any> => {
+  let url = `/api/item/${table}`;
+  if (uuid) url += `?uuid=${encodeURIComponent(uuid)}`;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("Failed to fetch items");
+  return response.json();
 };
 
-export const fetchFile = async (uuid: string): Promise<{ url: string; fileType: string }> => {
-    const response = await fetch(`/api/get_items/${uuid}`);
-    if (!response.ok) throw new Error('Failed to fetch file');
+export const fetchRelatedItems = async (
+  uuid: string,
+  model1: string,
+  model2: string,
+  limit_to_user: boolean
+): Promise<any> => {
+  const response = await fetch(
+    `/api/related/${uuid}/${model1}/${model2}?limit_to_user=${limit_to_user}`
+  );
+  if (!response.ok) throw new Error("Failed to fetch related items");
+  return response.json();
+};
 
-    const fileType = response.headers.get('Content-Type') || 'application/octet-stream';
+export const fetchFile = async (
+  uuid: string
+): Promise<{ url: string; fileType: string }> => {
+  const response = await fetch(`/api/get_items/${uuid}`);
+  if (!response.ok) throw new Error("Failed to fetch file");
 
-    // Create a new ReadableStream from the response body
-    const reader = response.body?.getReader();
-    const stream = new ReadableStream({
-        start(controller) {
-            return pump();
-            function pump(): Promise<void> {
-                return reader?.read().then(({ done, value }) => {
-                    if (done) {
-                        controller.close();
-                        return;
-                    }
-                    controller.enqueue(value);
-                    return pump();
-                }) || Promise.resolve();
+  const fileType =
+    response.headers.get("Content-Type") || "application/octet-stream";
+
+  // Create a new ReadableStream from the response body
+  const reader = response.body?.getReader();
+  const stream = new ReadableStream({
+    start(controller) {
+      return pump();
+      function pump(): Promise<void> {
+        return (
+          reader?.read().then(({ done, value }) => {
+            if (done) {
+              controller.close();
+              return;
             }
-        }
-    });
+            controller.enqueue(value);
+            return pump();
+          }) || Promise.resolve()
+        );
+      }
+    },
+  });
 
-    // Create a new response with the stream
-    const newResponse = new Response(stream);
+  // Create a new response with the stream
+  const newResponse = new Response(stream);
 
-    // Get the blob from the new response
-    const blob = await newResponse.blob();
+  // Get the blob from the new response
+  const blob = await newResponse.blob();
 
-    const pdf_blob =  blob.slice(0, blob.size, "application/pdf")
+  const pdf_blob = blob.slice(0, blob.size, "application/pdf");
 
-    // Create a URL for the blob
-    const url = URL.createObjectURL(pdf_blob);
+  // Create a URL for the blob
+  const url = URL.createObjectURL(pdf_blob);
 
-    return { url, fileType };
+  return { url, fileType };
 };
 
 interface RatingRequest {
-    result_id: string;
-    good_response: boolean;
+  result_id: string;
+  good_response: boolean;
 }
 
-export const rateResponse = async (ratingRequest: RatingRequest): Promise<{ message: string }> => {
-    const response = await fetch(`/api/rate`, {
-        method: 'POST',
-        body: JSON.stringify(ratingRequest),
-    });
-    if (!response.ok) throw new Error('Failed to submit rating');
-    return response.json();
+export const rateResponse = async (
+  ratingRequest: RatingRequest
+): Promise<{ message: string }> => {
+  const response = await fetch(`/api/rate`, {
+    method: "POST",
+    body: JSON.stringify(ratingRequest),
+  });
+  if (!response.ok) throw new Error("Failed to submit rating");
+  return response.json();
+};
+
+export const logOut = async (refreshToken: string) => {
+  try {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_COGNITO_AUTH_DOMAIN}/oauth2/revoke`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Authorization: `Basic ${btoa(
+            `${process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID}:${process.env.NEXT_PUBLIC_COGNITO_CLIENT_SECRET}`
+          )}`,
+        },
+        body: new URLSearchParams({
+          token: refreshToken as string,
+        }),
+      }
+    );
+    if (!response.ok) {
+      console.error("========== Error revoking token:", await response.json());
+    }
+    console.log("Token revoked:", response);
+  } catch (error) {
+    console.error("Error revoking token:", error);
+  }
+
+  const logoutUrl = `${
+    process.env.NEXT_PUBLIC_COGNITO_AUTH_DOMAIN
+  }/logout?client_id=${
+    process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID
+  }&logout_uri=${encodeURIComponent(
+    window.location.origin
+  )}/signed-out&response_type=code&federated`;
+
+  signOut({ redirect: false });
+  setTimeout(() => {
+    //window.location.href = logoutUrl;
+    debugger;
+    window.opener = null;
+    window.open("", "_self");
+    window.close();
+  }, 2000);
 };

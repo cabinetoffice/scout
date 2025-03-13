@@ -155,10 +155,6 @@ export const logOut = async (refreshToken: string) => {
 
   signOut({ redirect: false });
   setTimeout(() => {
-    //window.location.href = logoutUrl;
-    debugger;
-    window.opener = null;
-    window.open("", "_self");
-    window.close();
+    window.location.href = logoutUrl;
   }, 2000);
 };

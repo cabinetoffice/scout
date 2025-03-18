@@ -14,14 +14,30 @@ export default async function handler(
     switch (method) {
         case 'GET':
             try {
-                const data = {
+                // Extract the OIDC data from the request headers
+                const oidcData = headers?.['x-amzn-oidc-data']; // Safely access the header
+                const formattedOidcData = Array.isArray(oidcData) 
+                    ? oidcData.join(',')  // Convert array to comma-separated string
+                    : oidcData || '';      // Ensure it's always a string
+
+                const requestInit: RequestInit = {
                     method: 'GET',
                     headers: {
-                        ...filterHeaderForAWSValues(headers), // Filter out cookies (not needed for backend requests
-                    } as HeadersInit,
+                        "Authorization": `Bearer ${headers?.['x-amzn-oidc-data']}`,
+                        ...filterHeaderForAWSValues(headers),
+                        'Content-Type': 'application/json',
+                        'x-amzn-oidc-data': formattedOidcData
+                    },
+                    credentials: "include"
                 }
+
+                console.log(`Headers in the item.ts request:: ${JSON.stringify(headers, null, 2)}`);
+                console.log(`OIDC item.ts Data: ${oidcData}`);
+                console.log(`Data item.ts being sent: ${JSON.stringify(requestInit, null, 2)}`);
+
                 const queryString = new URLSearchParams(query as any as URLSearchParams).toString();
-                const response = await fetch(process.env.BACKEND_HOST + `/api/item?${queryString}`, data);
+                const response = await fetch(process.env.BACKEND_HOST + `/api/item?${queryString}`, requestInit);
+
                 if (!response.ok) {
                     console.error(await response.text())
                     console.error(await response.json())

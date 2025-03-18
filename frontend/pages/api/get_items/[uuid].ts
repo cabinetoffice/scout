@@ -13,11 +13,28 @@ export default async function handler(
     switch (method) {
         case 'GET':
             try {
-                const request: RequestInit = {
-                    method: "GET",
-                    headers: {...filterHeaderForAWSValues(headers)} as HeadersInit
-                };
-                const response = await fetch(process.env.BACKEND_HOST + '/api/get_file/' + uuid, request);
+                // Extract the OIDC data from the request headers
+                const oidcData = headers?.['x-amzn-oidc-data']; // Safely access the header
+                const formattedOidcData = Array.isArray(oidcData) 
+                    ? oidcData.join(',')  // Convert array to comma-separated string
+                    : oidcData || '';      // Ensure it's always a string
+
+                const requestInit: RequestInit = {
+                    method: 'GET',
+                    headers: {
+                        "Authorization": `Bearer ${headers?.['x-amzn-oidc-data']}`,
+                        ...filterHeaderForAWSValues(headers),
+                        'Content-Type': 'application/json',
+                        'x-amzn-oidc-data': formattedOidcData
+                    },
+                    credentials: "include"
+                }
+
+                console.log(`Headers in the uuid.ts request:: ${JSON.stringify(headers, null, 2)}`);
+                console.log(`OIDC uuid.ts Data: ${oidcData}`);
+                console.log(`Data uuid.ts being sent: ${JSON.stringify(requestInit, null, 2)}`);
+
+                const response = await fetch(process.env.BACKEND_HOST + '/api/get_file/' + uuid, requestInit);
                 if (!response.ok) {
                     throw new Error('Failed to get item by uuid');
                 }

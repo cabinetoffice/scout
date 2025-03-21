@@ -158,3 +158,19 @@ export const logOut = async (refreshToken: string) => {
     window.location.href = logoutUrl;
   }, 2000);
 };
+
+export const submitQuery = async (query: string): Promise<any> => {
+  const response = await fetch(`/api/custom-query`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to submit query");
+  }
+
+  return response.json();
+};

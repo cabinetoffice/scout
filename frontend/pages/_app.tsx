@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import "../public/styles/App.css";
 import "../public/styles/index.css";
 import "../public/styles/FileViewer.css";
+import "../public/styles/CustomQuery.css";
 import { SessionProvider } from "next-auth/react";
 import LogoutButton from "./auth/signout";
 
@@ -39,6 +40,15 @@ export default function MyApp({ Component, pageProps }: AppProps) {
                   }`}
                 >
                   File Viewer
+                </a>
+              </Link>
+              <Link href="/custom-query/" passHref legacyBehavior>
+                <a
+                  className={`nav-link ${
+                    isActive("/custom-query") ? "active" : ""
+                  }`}
+                >
+                  Custom Query
                 </a>
               </Link>
               <LogoutButton />

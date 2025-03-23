@@ -49,7 +49,7 @@ export default function Logout() {
 
       // Redirect to login page after 10 seconds
       const redirectTimer = setTimeout(() => {
-        router.push("/");
+        window.location.reload();
       }, 10000);
 
       return () => clearTimeout(redirectTimer);

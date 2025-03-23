@@ -1,9 +1,10 @@
 import base64
+from datetime import datetime
 import json
 import logging
 import typing
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, List
 from typing import Optional
 from uuid import UUID
 
@@ -132,8 +133,15 @@ def get_current_user(
         logger.info(f"user in db: {user}")
         logger.info(f"project_names: {project_names}")
         logger.info(f"projects: {projects}")
+            
+        if user:
+            updated_user = interface.update_item(
+                UserUpdate(id=user.id, email=user.email, projects=projects, updated_datetime=datetime.utcnow())
+            )
+            return updated_user
+
+        return interface.get_or_create_item(UserCreate(email=email, projects=projects))
         
-        return user or interface.get_or_create_item(UserCreate(email=email, projects=projects))
     except Exception as e:
         logger.error(f"Error processing user: {e}")
         raise HTTPException(status_code=401, detail="Failed to process OIDC data")
@@ -346,3 +354,4 @@ def rate_response(
         )
         response = interface.get_or_create_item(new_rating)
         return {"message": f"Rating {response.id} submitted successfully"}
+

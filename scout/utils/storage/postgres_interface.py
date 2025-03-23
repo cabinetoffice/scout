@@ -1,3 +1,4 @@
+from datetime import datetime
 import logging
 from uuid import UUID
 
@@ -590,6 +591,7 @@ def _update_user(model: UserUpdate, db: Session) -> PyUser | None:
         return None
 
     item.email = model.email
+    item.updated_datetime = datetime.utcnow()
 
     if not model.projects:
         item.projects = []

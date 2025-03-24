@@ -104,25 +104,13 @@ def ingest_criteria_from_s3(
     """
     session = boto3.session.Session()
     region = os.environ.get("AWS_REGION", "eu-west-2")
-    # s3_client = boto3.client("s3", region_name=region)
     endpoint_url = os.environ.get("S3_URL")
-    #s3_client = boto3.client("s3", config=Config(region_name=region, endpoint_url=endpoint_url))
-    #s3_client = boto3.client("s3", region_name=region, endpoint_url=endpoint_url)
     s3_client = boto3.client(
         "s3",
         region_name=region,
-        #endpoint_url=endpoint_url
     )
     for file_path in gate_filepaths:
         try:
-            # logger.info(f"Reading criteria from S3: {bucket_name}/{file_path}")
-            # all_objects = s3_client.list_objects(Bucket = bucket_name) 
-            # logger.info(f"all_objects1: {all_objects}")
-            # all_objects = s3_client.list_objects_v2(
-            # Bucket=bucket_name,
-            # Prefix ='',
-            # MaxKeys=100 )
-            # logger.info(f"all_objects2: {all_objects}")
             response = s3_client.get_object(Bucket=bucket_name, Key=file_path)
             csv_content = response["Body"].read().decode("utf-8")
             reader = csv.DictReader(csv_content.splitlines())

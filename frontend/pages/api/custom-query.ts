@@ -10,25 +10,32 @@ export default async function handler(
   switch (method) {
     case "POST":
       try {
-        const { query } = req.body; // Accept query parameters from the request
+        // Extract the OIDC data from the request headers
+        const oidcData = headers?.["x-amzn-oidc-data"]; // Safely access the header
+        const formattedOidcData = Array.isArray(oidcData)
+          ? oidcData.join(",") // Convert array to comma-separated string
+          : oidcData || ""; // Ensure it's always a string
 
-        const data = {
+        const requestInit: RequestInit = {
           method: "POST",
           headers: {
-            ...filterHeaderForAWSValues(headers), // Filter out cookies (not needed for backend requests)
-            "Content-Type": "application/json", // Set Content-Type header
+            Authorization: `Bearer ${headers?.["x-amzn-oidc-data"]}`,
+            ...filterHeaderForAWSValues(headers),
+            "Content-Type": "application/json",
+            "x-amzn-oidc-data": formattedOidcData,
           },
-          body: JSON.stringify({
-            query: query,
-            modelId: process.env.AWS_BEDROCK_MODEL_ID,
-            knowledgeBaseId: process.env.AWS_BEDROCK_KNOWLEDGE_BASE_ID,
-          }),
+          credentials: "include",
         };
 
         console.log(
-          `Sending request to:  ${process.env.AWS_BEDROCK_LAMDA_URL}`
+          `Sending request to:  ${process.env.BACKEND_HOST}/api/custom-query`
         );
-        const response = await fetch(process.env.AWS_BEDROCK_LAMDA_URL!, data);
+        const response = await fetch(
+          `${
+            process.env.BACKEND_HOST
+          }/api/custom-query?query=${encodeURIComponent(req.body.query)}`,
+          requestInit
+        );
 
         if (!response.ok) {
           console.error(await response.text());

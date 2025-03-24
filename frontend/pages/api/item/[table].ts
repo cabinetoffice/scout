@@ -31,10 +31,6 @@ export default async function handler(
                     credentials: "include"
                 }
 
-                console.log(`Headers in the table.ts request:: ${JSON.stringify(headers, null, 2)}`);
-                console.log(`OIDC table.ts Data: ${oidcData}`);
-                console.log(`Data table.ts being sent: ${JSON.stringify(requestInit, null, 2)}`);
-
                 const queryString = new URLSearchParams(
                     uuid ? {
                         uuid: uuid as string,

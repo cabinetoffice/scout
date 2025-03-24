@@ -135,11 +135,6 @@ def get_current_user(
         users = interface.filter_items(UserFilter(email=email), None)
         user = users[0] if users else None
 
-        logger.info(f"token_data: {token_data}")
-        logger.info(f"email from token: {email}")
-        logger.info(f"token_data: {token_data}")
-        logger.info(f"user in db: {user}")
-
         if user:
             
             user_projects_ids = [row.project_id for row in SessionLocal().execute(select(project_users).where(project_users.c.user_id == user.id)).all()]

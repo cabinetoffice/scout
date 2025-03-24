@@ -31,10 +31,6 @@ export default async function handler(
                     credentials: "include"
                 }
 
-                console.log(`Headers in the model2.ts request:: ${JSON.stringify(headers, null, 2)}`);
-                console.log(`OIDC model2.ts Data: ${oidcData}`);
-                console.log(`Data model2.ts being sent: ${JSON.stringify(requestInit, null, 2)}`);
-
                 const response = await fetch(process.env.BACKEND_HOST + '/api/related/' + uuid + '/' + model1 + '/' + model2 + '?limit_to_user=' + limit_to_user, requestInit);
                 if (!response.ok) {
                     console.error(await response.text())

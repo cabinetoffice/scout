@@ -30,14 +30,8 @@ export default async function handler(
                     body: body,
                     credentials: "include"
                 }
-                
-                console.log(`Headers in the request:: ${JSON.stringify(headers, null, 2)}`);
-                console.log(`Data being sent: ${JSON.stringify(requestInit, null, 2)}`);
 
-                console.log(`Sending request to: ${process.env.BACKEND_HOST}/api/read_items_by_attribute`);
                 const response = await fetch(process.env.BACKEND_HOST + '/api/read_items_by_attribute', requestInit);
-                console.log(`Response3 status: ${response.status}`);
-
 
                 if (!response.ok) {
                     console.error(await response.text())

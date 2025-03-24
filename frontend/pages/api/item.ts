@@ -30,11 +30,7 @@ export default async function handler(
                     },
                     credentials: "include"
                 }
-
-                console.log(`Headers in the item.ts request:: ${JSON.stringify(headers, null, 2)}`);
-                console.log(`OIDC item.ts Data: ${oidcData}`);
-                console.log(`Data item.ts being sent: ${JSON.stringify(requestInit, null, 2)}`);
-
+                
                 const queryString = new URLSearchParams(query as any as URLSearchParams).toString();
                 const response = await fetch(process.env.BACKEND_HOST + `/api/item?${queryString}`, requestInit);
 

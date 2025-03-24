@@ -13,16 +13,25 @@ export default async function handler(
     switch (method) {
         case 'POST':
             try {
-                const data = {
+                // Extract the OIDC data from the request headers
+                const oidcData = headers?.['x-amzn-oidc-data']; // Safely access the header
+                const formattedOidcData = Array.isArray(oidcData) 
+                    ? oidcData.join(',')  // Convert array to comma-separated string
+                    : oidcData || '';      // Ensure it's always a string
+
+                const requestInit: RequestInit = {
                     method: 'POST',
                     headers: {
-                        ...filterHeaderForAWSValues(headers), // Filter out cookies (not needed for backend requests
-                        'Content-Type': 'application/json', // Set Content-Type header
+                        "Authorization": `Bearer ${headers?.['x-amzn-oidc-data']}`,
+                        ...filterHeaderForAWSValues(headers),
+                        'Content-Type': 'application/json',
+                        'x-amzn-oidc-data': formattedOidcData
                     },
-                    body: body
+                    body: body,
+                    credentials: "include"
                 }
-                console.log(`Sending request to: ${process.env.BACKEND_HOST}/api/read_items_by_attribute`)
-                const response = await fetch(process.env.BACKEND_HOST + '/api/read_items_by_attribute', data);
+
+                const response = await fetch(process.env.BACKEND_HOST + '/api/read_items_by_attribute', requestInit);
 
                 if (!response.ok) {
                     console.error(await response.text())

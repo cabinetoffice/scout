@@ -13,16 +13,21 @@ export async function fetchAPIInfo() {
 }
 
 export const fetchUser = async () => {
-    const res = await fetch(`/api/user`)
-    if (res.ok) {
-        const resJSON = await res.json()
-        const result = resJSON.response
-        if (result) {
-            return result
+    try {
+      const response = await fetch('/api/auth/user');
+      if (!response.ok) {
+        if (response.status === 401) {
+          // User is not authenticated
+          return null;
         }
+        throw new Error('Failed to fetch user data');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+      return null;
     }
-    throw new Error('Service unavailable')
-}
+  };
 
 export const fetchReadItemsByAttribute = async (filters: Filters): Promise<any> => {
     const response = await fetch(`/api/read_items_by_attribute`, {
@@ -99,4 +104,11 @@ export const rateResponse = async (ratingRequest: RatingRequest): Promise<{ mess
     });
     if (!response.ok) throw new Error('Failed to submit rating');
     return response.json();
+};
+
+export const logoutUser = async () => {
+    const response = await fetch('/api/logout', {
+        method: 'POST',
+    });
+    if (!response.ok) throw new Error('Failed to logout');
 };

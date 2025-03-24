@@ -100,6 +100,23 @@ class BaseEvaluator(ABC):
             )
         return prompt, extracts
 
+    def _build_bedrock_request(self, messages: List[Dict]) -> Dict:
+        """Builds a request body for the Bedrock API."""
+        return {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 1000,
+            "messages": messages,
+        }
+    
+    def _invoke_bedrock_model(self, request_body: Dict) -> Dict:
+        """Invokes the Bedrock model with the given request body and returns the response."""
+        response = api_call_with_retry(
+            self.llm.invoke_model,
+            modelId=os.getenv("AWS_BEDROCK_MODEL_ID"),
+            body=json.dumps(request_body)
+        )
+        return response
+
     def answer_question(
         self,
         question: str,
@@ -120,30 +137,24 @@ class BaseEvaluator(ABC):
                             "project": str(self.project.id)}
                     )
 
-                    # Create a request for Bedrock using Claude's expected format
-                    request_body = {
-                        "anthropic_version": "bedrock-2023-05-31",
-                        "max_tokens": 1000,
-                        "messages": [
-                            {
-                                "role": "assistant",
-                                "content": SYSTEM_EVIDENCE_POINTS_PROMPT
-                            },
-                            {
-                                "role": "user",
-                                "content": USER_EVIDENCE_POINTS_PROMPT.format(
-                                    question=question, extracts=extracts_prompt
-                                )
-                            }
-                        ]
-                    }
+                    # Create the message for Bedrock using Claude's expected format
+                    evidence_messages = [
+                        {
+                            "role": "assistant",
+                            "content": SYSTEM_EVIDENCE_POINTS_PROMPT
+                        },
+                        {
+                            "role": "user",
+                            "content": USER_EVIDENCE_POINTS_PROMPT.format(
+                                question=question, extracts=extracts_prompt
+                            )
+                        }
+                    ]
+                    # Build the request for Bedrock.
+                    request_body = self._build_bedrock_request(evidence_messages)
 
                     # Make the Bedrock API call
-                    evidence_response = api_call_with_retry(
-                        self.llm.invoke_model,
-                        modelId=os.getenv("AWS_BEDROCK_MODEL_ID"),
-                        body=json.dumps(request_body)
-                    )
+                    evidence_response = self._invoke_bedrock_model(request_body)
 
                     # Parse the response
                     response_body = json.loads(
@@ -162,55 +173,43 @@ class BaseEvaluator(ABC):
                 question, k=k, filters={"project": str(self.project.id)})
             chunks = [extract['metadata']['uuid'] for extract in extracts]
 
-            # Create a request for Bedrock using Claude's expected format
-            request_body = {
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 1000,
-                "messages": [
-                    {"role": "user", "content": SYSTEM_QUESTION_PROMPT + "\n\n" +
-                     SYSTEM_HYPOTHESIS_PROMPT.format(hypotheses=self.hypotheses) + "\n\n" +
-                     USER_QUESTION_PROMPT.format(
-                         question=question,
-                         extracts=extracts,
-                         evidence_point_answers=evidence_answer_pairs,
-                     )}
-                ]
-            }
-            # Make the Bedrock API call
-            question_response = api_call_with_retry(
-                self.llm.invoke_model,
-                modelId=os.getenv("AWS_BEDROCK_MODEL_ID"),
-                body=json.dumps(request_body)
-            )
+            # Create the message for Bedrock using Claude's expected format
+            question_messages = [
+                {"role": "user", "content": SYSTEM_QUESTION_PROMPT + "\n\n" +
+                    SYSTEM_HYPOTHESIS_PROMPT.format(hypotheses=self.hypotheses) + "\n\n" +
+                    USER_QUESTION_PROMPT.format(
+                        question=question,
+                        extracts=extracts,
+                        evidence_point_answers=evidence_answer_pairs,
+                    )}
+            ]
+            # Build request and invoke model
+            request_body = self._build_bedrock_request(question_messages)
+            question_response = self._invoke_bedrock_model(request_body)
+           
             # Parse the response
             response_body = json.loads(
                 question_response["body"].read().decode())
             answer = response_body["content"][0]["text"]
 
             # Create a request for Bedrock using Claude's expected format
-            hypo_request_body = {
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 1000,
-                "messages": [
-                    {"role": "user", "content": CORE_SCOUT_PERSONA + "\n\n" +
-                     USER_REGENERATE_HYPOTHESIS_PROMPT.format(
-                         hypotheses=self.hypotheses,
-                         questions_and_answers=question + answer,
-                     ) + "\n\n" +
-                     USER_QUESTION_PROMPT.format(
-                         question=question,
-                         extracts=extracts,
-                         evidence_point_answers=evidence_answer_pairs,
-                     )}
-                ]
-            }
+            hypo_messages = [
+                {"role": "user", "content": CORE_SCOUT_PERSONA + "\n\n" +
+                    USER_REGENERATE_HYPOTHESIS_PROMPT.format(
+                        hypotheses=self.hypotheses,
+                        questions_and_answers=question + answer,
+                    ) + "\n\n" +
+                    USER_QUESTION_PROMPT.format(
+                        question=question,
+                        extracts=extracts,
+                        evidence_point_answers=evidence_answer_pairs,
+                    )}
+            ]
+            # Build the request for Bedrock.
+            hypo_request_body = self._build_bedrock_request(hypo_messages)
 
             # Make the Bedrock API call
-            hypotheses_response = api_call_with_retry(
-                self.llm.invoke_model,
-                modelId=os.getenv("AWS_BEDROCK_MODEL_ID"),
-                body=json.dumps(hypo_request_body)
-            )
+            hypotheses_response = self._invoke_bedrock_model(hypo_request_body)
 
             # Parse the response
             hypo_response_body = json.loads(
@@ -304,25 +303,18 @@ class MainEvaluator(BaseEvaluator):
 
         formatted_input = ", ".join(
             [f"Question: {qa[0]}\nAnswer: {qa[1]}" for qa in question_answer_pairs])
-
-        # Create a request for Bedrock using Claude's expected format
-        request_body = {
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 1000,
-            "messages": [
+        
+        # Create the message for Bedrock using Claude's expected format
+        summary_messages = [
                 {
                     "role": "user",
                     "content": SUMMARIZE_RESPONSES_PROMPT.format(qa_pairs=formatted_input)
                 }
             ]
-        }
 
-        # Make the Bedrock API call
-        response = api_call_with_retry(
-            self.llm.invoke_model,
-            modelId=os.getenv("AWS_BEDROCK_MODEL_ID"),
-            body=json.dumps(request_body)
-        )
+        # Build request and invoke model
+        request_body = self._build_bedrock_request(summary_messages)
+        response = self._invoke_bedrock_model(request_body)
 
         # Parse the response
         response_body = json.loads(response["body"].read().decode())

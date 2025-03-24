@@ -298,12 +298,10 @@ class UserBase(BaseModel):
 
 class UserCreate(BaseModel):
     email: str
-    projects: List["ProjectBase"] = Field(default_factory=list)
-
 
 class UserUpdate(UserCreate):
     id: UUID
-
+    updated_datetime: datetime = Field(default_factory=datetime.utcnow)
 
 class UserFilter(BaseModel):
     email: Optional[str] = None

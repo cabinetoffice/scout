@@ -298,8 +298,6 @@ class UserBase(BaseModel):
 
 class UserCreate(BaseModel):
     email: str
-    projects: List["ProjectBase"] = Field(default_factory=list)
-
 
 class UserUpdate(UserCreate):
     id: UUID

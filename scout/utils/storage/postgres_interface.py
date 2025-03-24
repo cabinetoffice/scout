@@ -34,6 +34,7 @@ from scout.DataIngest.models.schemas import ResultCreate
 from scout.DataIngest.models.schemas import ResultFilter
 from scout.DataIngest.models.schemas import ResultUpdate
 from scout.DataIngest.models.schemas import User as PyUser
+from scout.DataIngest.models.schemas import UserBase
 from scout.DataIngest.models.schemas import UserCreate
 from scout.DataIngest.models.schemas import UserFilter
 from scout.DataIngest.models.schemas import UserUpdate
@@ -270,12 +271,6 @@ def _get_or_create_user(
     db.commit()
     db.flush()  # Refresh created item to add ID to it
 
-    for project in model.projects:
-        existing_project: SqProject | None = db.query(SqProject).get(project.id)
-        db.execute(project_users.insert().values(user_id=item_to_add.id, project_id=existing_project.id))
-        db.commit()
-
-    db.flush()
     return PyUser.model_validate(item_to_add)
 
 
@@ -593,14 +588,8 @@ def _update_user(model: UserUpdate, db: Session) -> PyUser | None:
     item.email = model.email
     item.updated_datetime = datetime.utcnow()
 
-    if not model.projects:
-        item.projects = []
-        db.commit()
-        db.refresh(item)
-    else:
-        item.projects = [db.query(SqProject).get(project.id) for project in model.projects]
-        db.commit()
-        db.refresh(item)
+    db.commit()
+    db.refresh(item)
 
     return PyUser.model_validate(item)
 
@@ -621,30 +610,29 @@ def _update_result(model: ResultUpdate, db: Session) -> PyResult | None:
 
     return PyResult.model_validate(item)
 
-
 def filter_items(
-    model: UserFilter | ProjectFilter | ResultFilter | ChunkFilter | CriterionFilter | FileFilter | RatingFilter,
+    model: UserFilter | ProjectFilter | ResultFilter | ChunkFilter | CriterionFilter | FileFilter | RatingFilter, current_user: PyUser
 ) -> list[PyUser | PyProject | PyResult | PyChunk | PyCriterion | PyFile | PyRating]:
     model_type = type(model)
     with SessionManager() as db:
         try:
             if model_type is ProjectFilter:
-                return _filter_project(model, db)
+                return _filter_project(model, db, current_user)
             if model_type is UserFilter:
                 return _filter_user(model, db)
             if model_type is CriterionFilter:
-                return _filter_criterion(model, db)
+                return _filter_criterion(model, db, current_user)
             if model_type is ResultFilter:
-                return _filter_result(model, db)
+                return _filter_result(model, db, current_user)
             if model_type is ChunkFilter:
-                return _filter_chunk(model, db)
+                return _filter_chunk(model, db, current_user)
             if model_type is FileFilter:
-                return _filter_file(model, db)
+                return _filter_file(model, db, current_user)
             if model_type is RatingFilter:
-                return _filter_rating(model, db)
-        except Exception as _:
-            logger.exception(f"Failed to filter items, {model}")
-
+                return _filter_rating(model, db, current_user)
+        except Exception as e:
+            logger.exception(f"Failed to filter items, {model}: {e}")
+            return []
 
 def _filter_rating(model, db):
     query = db.query(SqRating)
@@ -680,8 +668,11 @@ def _filter_user(model: UserFilter, db: Session) -> list[PyUser]:
     return results
 
 
-def _filter_file(model: FileFilter, db: Session) -> list[PyFile]:
+def _filter_file(model: FileFilter, db: Session, current_user: PyUser) -> list[PyFile]:
     query = db.query(SqFile)
+    user_project_ids = [project.id for project in current_user.projects]
+    query = query.filter(SqFile.project_id.in_(user_project_ids))
+
     if model.name:
         query = query.filter(SqFile.name.ilike(f"%{model.name}%"))
     if model.type:
@@ -709,7 +700,7 @@ def _filter_file(model: FileFilter, db: Session) -> list[PyFile]:
     return results
 
 
-def _filter_chunk(model: ChunkFilter, db: Session) -> list[PyChunk]:
+def _filter_chunk(model: ChunkFilter, db: Session, current_user: PyUser) -> list[PyChunk]:
     query = db.query(SqChunk)
     if model.idx:
         query = query.filter(SqChunk.idx.ilike(f"%{model.idx}%"))
@@ -731,7 +722,7 @@ def _filter_chunk(model: ChunkFilter, db: Session) -> list[PyChunk]:
     return results
 
 
-def _filter_criterion(model: CriterionFilter, db: Session) -> list[PyCriterion]:
+def _filter_criterion(model: CriterionFilter, db: Session, current_user: PyUser) -> list[PyCriterion]:
     query = db.query(SqCriterion)
     if model.category:
         query = query.filter(SqCriterion.gate.ilike(f"%{model.gate}%"))
@@ -757,7 +748,7 @@ def _filter_criterion(model: CriterionFilter, db: Session) -> list[PyCriterion]:
     return results
 
 
-def _filter_project(model: ProjectFilter, db: Session) -> list[PyProject]:
+def _filter_project(model: ProjectFilter, db: Session, current_user: PyUser) -> list[PyProject]:
     query = db.query(SqProject)
     if model.name:
         query = query.filter(SqProject.name.ilike(f"%{model.name}%"))
@@ -791,7 +782,7 @@ def _filter_project(model: ProjectFilter, db: Session) -> list[PyProject]:
     return results
 
 
-def _filter_result(model: ResultFilter, db: Session) -> list[PyResult]:
+def _filter_result(model: ResultFilter, db: Session, current_user: PyUser) -> list[PyResult]:
     query = db.query(SqResult)
     if model.answer:
         query = query.filter(SqResult.answer.ilike(f"%{model.answer}%"))

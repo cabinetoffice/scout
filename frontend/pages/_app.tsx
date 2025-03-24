@@ -133,6 +133,15 @@ export default function MyApp({ Component, pageProps }: AppProps) {
                 </a>
               </Link>
             )}
+            <Link href="/custom-query/" passHref legacyBehavior>
+              <a
+                className={`nav-link ${
+                  isActive("/custom-query") ? "active" : ""
+                }`}
+              >
+                Custom Query
+              </a>
+            </Link>
           </nav>
           <div className="user-section">
             {!loading &&

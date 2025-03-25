@@ -407,7 +407,7 @@ def remove_user_from_project(
         db.commit()
     return {"message": f"User {user.id} removed from project {project.id}"}
 
-
+  
 @router.get("/admin/users")
 def get_all_users_with_projects(
     request: Request,
@@ -425,4 +425,4 @@ def get_all_users_with_projects(
     except Exception as e:
         logger.error(f"Error fetching all users: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching all users: {e}")
- 
+

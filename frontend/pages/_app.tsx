@@ -27,7 +27,6 @@ export default function MyApp({ Component, pageProps }: AppProps) {
       try {
         const userData = await fetchUser();
         setUser(userData);
-
         const adminList = await fetchAdminUsers();
         setAdminUsers(adminList);
 

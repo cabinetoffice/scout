@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import "../public/styles/App.css";
 import "../public/styles/index.css";
 import "../public/styles/FileViewer.css";
+import "../public/styles/CustomQuery.css";
 import { fetchUser, logoutUser, fetchAdminUsers } from "../utils/api";
 
 interface User {

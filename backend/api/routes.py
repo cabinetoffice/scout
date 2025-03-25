@@ -143,8 +143,6 @@ def get_current_user(
             projects = [interface.get_by_id(PyProject, project_id) for project_id in user_projects_ids]
             user.projects = projects
             logger.info(f"user projects: {user.projects}")
-            
-            
             updated_user = interface.update_item(
                 UserUpdate(id=user.id, email=user.email, updated_datetime=datetime.utcnow(), role=user.role)
             )
@@ -436,7 +434,7 @@ def custom_query(
     current_user: PyUser = Depends(get_current_user),
 ):
     model_id = os.getenv("AWS_BEDROCK_MODEL_ID")
-    knowledge_id = os.getenv("AWS_BEDROCK_KNOWLEDGE_BASE_ID")
+    knowledge_id = os.getenv("AWS_BEDROCK_KB_ID")
 
     if not model_id or not knowledge_id:
         raise HTTPException(status_code=500, detail="Model ID or Knowledge ID not found in environment variables")
@@ -445,8 +443,8 @@ def custom_query(
 
     payload = {
         "query": str(query),
-        "modelId": model_id,
-        "knowledgeBaseId": knowledge_id
+        "modelId": str(model_id),
+        "knowledgeBaseId": str(knowledge_id)
     }
 
     try:

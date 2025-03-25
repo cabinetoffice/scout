@@ -20,8 +20,7 @@ const CustomQuery = () => {
     setLoading(true);
 
     const data = await submitQuery(input);
-
-    const botMessage = { text: data.response, isUser: false };
+    const botMessage = { text: JSON.parse(data.body).response, isUser: false };
     setMessages((prevMessages) => [...prevMessages, botMessage]);
     setLoading(false);
   };

@@ -586,6 +586,7 @@ def _update_user(model: UserUpdate, db: Session) -> PyUser | None:
         return None
 
     item.email = model.email
+    item.role = model.role
     item.updated_datetime = datetime.utcnow()
 
     db.commit()

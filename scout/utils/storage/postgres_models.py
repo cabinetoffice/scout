@@ -59,6 +59,7 @@ class User(Base):
 
     ratings = relationship("Rating", back_populates="user")
 
+    role = Column(String)
 
 class CriterionGate(enum.Enum):
     GATE_0 = "GATE_0"

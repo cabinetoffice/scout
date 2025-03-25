@@ -109,10 +109,9 @@ def get_current_user(
     logger.info(f"ENVIRONMENT: {settings.ENVIRONMENT}")
     
     if settings.ENVIRONMENT == "local":
-        # A JWT for local testing, an example JWT from cognito, for user test@test.com
-        # pragma: allowlist nextline secret
-        authorization = "Bearer eyJ0eXAiOiJKV1QiLCJraWQiOiIxMjM0OTQ3YS01OWQzLTQ2N2MtODgwYy1mMDA1YzY5NDFmZmciLCJhbGciOiJIUzI1NiIsImlzcyI6Imh0dHBzOi8vY29nbml0by1pZHAuZXUtd2VzdC0yLmFtYXpvbmF3cy5jb20vZXUtd2VzdC0yX2V4YW1wbGUiLCJjbGllbnQiOiIzMjNqZDBuaW5kb3ZhM3NxdTVsbjY2NTQzMiIsInNpZ25lciI6ImFybjphd3M6ZWxhc3RpY2xvYWRiYWxhbmNpbmc6ZXUtd2VzdC0yOmFjYzpsb2FkYmFsYW5jZXIvYXBwL2FsYi85OWpkMjUwYTAzZTc1ZGVzIiwiZXhwIjoxNzI3MjYyMzk5fQ.eyJzdWIiOiI5MDQyOTIzNC00MDMxLTcwNzctYjliYS02MGQxYWYxMjEyNDUiLCJlbWFpbF92ZXJpZmllZCI6InRydWUiLCJjdXN0b206cHJvamVjdHMiOiJ0ZXN0IHByb2plY3R8dGVzdCBwcm9qZWN0IDJ8dGVzdC1wcm9qZWN0IiwiZW1haWwiOiJ0ZXN0QHRlc3QuY28udWsiLCJ1c2VybmFtZSI6InRlc3RAdGVzdC5jby51ayIsImV4cCI6MTcyNzI2MjM5OSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5ldS13ZXN0LTIuYW1hem9uYXdzLmNvbS9ldS13ZXN0LTJfZXhhbXBsZSJ9.CD5T4hoFiVuC7aABAAeDeI0Di2MSv8Icy5R05jF-Pzc"
-    
+        # A JWT for local testing
+        authorization = f"Bearer {settings.API_JWT_KEY}"
+
     """Extract user information from the OIDC token."""
     logger.info(f"Incoming Headers: {dict(request.headers)}")
     logger.info(f"x-amzn-oidc-data Header: {x_amzn_oidc_data}")
@@ -144,7 +143,7 @@ def get_current_user(
             
             
             updated_user = interface.update_item(
-                UserUpdate(id=user.id, email=user.email, updated_datetime=datetime.utcnow())
+                UserUpdate(id=user.id, email=user.email, updated_datetime=datetime.utcnow(), role=user.role)
             )
             return updated_user
 
@@ -407,3 +406,23 @@ def remove_user_from_project(
         db.execute(project_users.delete().where((project_users.c.user_id == user.id) & (project_users.c.project_id == project.id)))
         db.commit()
     return {"message": f"User {user.id} removed from project {project.id}"}
+
+
+@router.get("/admin/users")
+def get_all_users_with_projects(
+    request: Request,
+    current_user: PyUser = Depends(get_current_user),
+):
+    logger.log(level=logging.INFO, msg=request)
+    
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    try:
+        users = interface.filter_items(UserFilter(), current_user)
+
+        return users
+    except Exception as e:
+        logger.error(f"Error fetching all users: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching all users: {e}")
+ 

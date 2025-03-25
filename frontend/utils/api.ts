@@ -112,3 +112,20 @@ export const logoutUser = async () => {
     });
     if (!response.ok) throw new Error('Failed to logout');
 };
+
+export const fetchAdminUsers = async () => {
+try {
+    const response = await fetch('/api/admin/users');
+    if (!response.ok) {
+    if (response.status === 401) {
+        // User is not authenticated
+        return null;
+    }
+    throw new Error('Failed to fetch admin users');
+    }
+    return await response.json();
+} catch (error) {
+    console.error('Error fetching admin users:', error);
+    return null;
+}
+};

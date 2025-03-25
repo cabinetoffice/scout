@@ -5,7 +5,12 @@ import { useRouter } from "next/router";
 import "../public/styles/App.css";
 import "../public/styles/index.css";
 import "../public/styles/FileViewer.css";
-import { fetchUser, logoutUser } from "../utils/api";
+import { fetchUser, logoutUser, fetchAdminUsers } from "../utils/api";
+
+interface User {
+  email: string;
+  role: string;
+}
 
 export default function MyApp({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -14,14 +19,25 @@ export default function MyApp({ Component, pageProps }: AppProps) {
   const [showContextMenu, setShowContextMenu] = useState(false);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const userCircleRef = useRef<HTMLDivElement>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminUsers, setAdminUsers] = useState<User[]>([]);
 
   useEffect(() => {
     const getUserDetails = async () => {
       try {
         const userData = await fetchUser();
         setUser(userData);
+        const adminList = await fetchAdminUsers();
+        setAdminUsers(adminList);
+
+        const match = adminList.find(
+          (adminUser) =>
+            adminUser.email === userData?.email && adminUser.role === "admin"
+        );
+        setIsAdmin(!!match);
+        console.log("setIsAdmin:", !!match);
       } catch (error) {
-        console.error("Error fetching user:", error);
+        console.error("Error fetching user or admin users:", error);
       } finally {
         setLoading(false);
       }
@@ -110,6 +126,13 @@ export default function MyApp({ Component, pageProps }: AppProps) {
                 File Viewer
               </a>
             </Link>
+            {isAdmin && (
+              <Link href="/admin" passHref legacyBehavior>
+                <a className={`nav-link ${isActive("/admin") ? "active" : ""}`}>
+                  Admin
+                </a>
+              </Link>
+            )}
           </nav>
           <div className="user-section">
             {!loading &&
@@ -157,7 +180,7 @@ export default function MyApp({ Component, pageProps }: AppProps) {
         </div>
       </header>
       <main className="main-content">
-        <Component {...pageProps} />
+        <Component {...pageProps} adminUsers={adminUsers} />
       </main>
       <footer className="App-footer">
         <div className="footer-content">

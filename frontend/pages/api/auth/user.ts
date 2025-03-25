@@ -1,9 +1,14 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Get the user from the request headers (which should contain Cognito info)
-  const user = req.headers['x-amzn-oidc-data'];
-  
+
+  let user: string | string[] | undefined;
+  console.log("user key", process.env.API_JWT_KEY);
+  if (process.env.ENVIRONMENT == "local")
+    user = process.env.API_JWT_KEY;
+  else
+    user = req.headers['x-amzn-oidc-data'];
+
   if (!user) {
     return res.status(401).json({ error: 'Not authenticated' });
   }

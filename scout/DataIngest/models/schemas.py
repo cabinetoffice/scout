@@ -293,6 +293,7 @@ class UserBase(BaseModel):
     email: str
     created_datetime: datetime
     updated_datetime: Optional[datetime]
+    role: Optional[str] = None
     # review_type: str  # Where has this come from
 
 
@@ -302,11 +303,12 @@ class UserCreate(BaseModel):
 class UserUpdate(UserCreate):
     id: UUID
     updated_datetime: datetime = Field(default_factory=datetime.utcnow)
+    role: str
 
 class UserFilter(BaseModel):
     email: Optional[str] = None
     projects: Optional[List["ProjectBase"]] = []
-
+    role: Optional[str] = None
 
 class User(UserBase):
     # Allows pydantic/sqlalchemy to use ORM to pull out related objects instead of just references to them

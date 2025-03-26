@@ -11,6 +11,10 @@ interface User {
   email: string;
   role: string;
 }
+interface AdminUser {
+  email: string;
+  role: string;
+}
 
 export default function MyApp({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -31,10 +35,11 @@ export default function MyApp({ Component, pageProps }: AppProps) {
         setAdminUsers(adminList);
 
         const match = adminList.find(
-          (adminUser) =>
+          (adminUser: AdminUser) =>
             adminUser.email === userData?.email && adminUser.role === "admin"
         );
         setIsAdmin(!!match);
+        
         console.log("setIsAdmin:", !!match);
       } catch (error) {
         console.error("Error fetching user or admin users:", error);

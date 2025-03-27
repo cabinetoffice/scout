@@ -39,27 +39,16 @@ const Summary: React.FC = () => {
         });
         console.log("Negative results fetched:", results);
 
-        const fetchCriteria = async (result: Result) => {
-          return await fetchItems("criterion", result.criterion.id);
-        };
-
-        const criteria = await Promise.all(results.map(fetchCriteria));
-        const fetchedCategories = criteria.map(
-          (criterion) => criterion.category
-        );
-        console.log("Criterion fetched:", fetchedCategories);
-
-        const categoryCount: { [key: string]: number } = {};
-        fetchedCategories.forEach((category) => {
-          categoryCount[category] = (categoryCount[category] || 0) + 1;
+        const answerCount: { [key: string]: number } = {};
+        results.forEach((result: Result) => {
+          answerCount[result.answer] = (answerCount[result.answer] || 0) + 1;
         });
 
-        setChartLabels(Object.keys(categoryCount));
-        setChartData(Object.values(categoryCount));
-        setCategories(categoryCount);
+        setChartLabels(Object.keys(answerCount));
+        setChartData(Object.values(answerCount));
 
-        console.log("Chart labels:", Object.keys(categoryCount));
-        console.log("Chart data:", Object.values(categoryCount));
+        console.log("Chart labels:", Object.keys(answerCount));
+        console.log("Chart data:", Object.values(answerCount));
 
         // Fetching the project details
         console.log("Fetching project details...");
@@ -120,6 +109,28 @@ const Summary: React.FC = () => {
                 </>
               )}
             </p>
+            {projectDetails && (
+              <div style={{ marginTop: "20px" }}>
+                <h3>Project Overview</h3>
+                <ul style={{ listStyleType: "none", padding: 0 }}>
+                  <li>
+                    <strong>Project Name:</strong> {projectDetails.name}
+                  </li>
+                  <li>
+                    <strong>Review Type:</strong> {projectDetails.review_type}
+                  </li>
+                  <li>
+                    <strong>Created Date:</strong>{" "}
+                    {new Date(
+                      projectDetails.created_datetime
+                    ).toLocaleDateString()}
+                  </li>
+                  <li>
+                    <strong>Description:</strong> {projectDetails.description}
+                  </li>
+                </ul>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -136,14 +147,15 @@ const Summary: React.FC = () => {
           <PieChart data={chartData} labels={chartLabels} />
         </div>
       </div>
-      {Object.keys(categories).map((category) => (
+      {chartLabels.map((label, index) => (
         <div
           className="summary-card"
-          key={category}
+          key={label}
           style={{ marginBottom: "20px" }}
         >
-          <h2>{category}</h2>
-          <p>{`Number of negative results: ${categories[category]}`}</p>
+          <h2>{label}</h2>
+          <p>{`Count: ${chartData[index]}`}</p>
+          <a href={`/results?answer=${label}`}>View {label} results</a>
         </div>
       ))}
     </div>

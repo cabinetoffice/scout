@@ -277,7 +277,6 @@ def read_items_by_attribute(
         items = interface.filter_items(filter, current_user)
     if model is PyResult:
         filter = ResultFilter(
-            answer=filters.filters.get("answer", None),
             full_text=filters.filters.get("full_text", None),
         )
         items = interface.filter_items(filter, current_user)
@@ -302,6 +301,8 @@ def read_items_by_attribute(
             name=filters.filters.get("name", None),
         )
         items = interface.filter_items(filter)
+
+    logger.info(f"=================== Items found: {len(items)} ===================")
     return items
 
 

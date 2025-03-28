@@ -26,7 +26,7 @@ const Summary: React.FC = () => {
   const [chartLabels, setChartLabels] = useState<string[]>([]);
   const [summaryText, setSummaryText] = useState<string>("");
   const [gateUrl, setGateUrl] = useState<string | null>(null);
-  const [categories, setCategories] = useState<{ [key: string]: number }>({});
+  const [criterion, setCriterion] = useState<string>("");
   const [projectDetails, setProjectDetails] = useState<any>(null);
 
   useEffect(() => {
@@ -35,14 +35,21 @@ const Summary: React.FC = () => {
         console.log("Fetching results...");
         const results = await fetchReadItemsByAttribute({
           model: "result",
-          filters: {},
+          filters: { answer: "" },
         });
-        console.log("Negative results fetched:", results);
+        console.log("Results fetched:", results);
 
         const answerCount: { [key: string]: number } = {};
         results.forEach((result: Result) => {
           answerCount[result.answer] = (answerCount[result.answer] || 0) + 1;
         });
+
+        if (results.length > 0) {
+          const firstResult = results[0];
+          if (firstResult.criterion && firstResult.criterion.gate) {
+            setCriterion(firstResult.criterion.gate);
+          }
+        }
 
         setChartLabels(Object.keys(answerCount));
         setChartData(Object.values(answerCount));
@@ -90,47 +97,39 @@ const Summary: React.FC = () => {
               Welcome to <strong>Scout!</strong>
             </h2>
             <p>
-              {gateUrl && (
-                <>
-                  This AI tool helps you navigate your document set before your
-                  review. Please check the details below are correct before
-                  continuing
-                  <ul>
+              <>
+                This AI tool helps you navigate your document set before your
+                review. Please check the details below are correct before
+                continuing
+                <ul>
+                  <li>
                     <strong>Review Type:</strong> {projectDetails.review_type}{" "}
-                    <br />
-                    <strong>Project Name:</strong> {projectDetails.name}
-                  </ul>
-                  This tool has preprocessed your documents and analysed them
-                  against the questions in the
-                  <a href={gateUrl} target="_blank" rel="noopener noreferrer">
-                    {projectDetails.review_type} workbook
-                  </a>
-                  .
-                </>
-              )}
-            </p>
-            {projectDetails && (
-              <div style={{ marginTop: "20px" }}>
-                <h3>Project Overview</h3>
-                <ul style={{ listStyleType: "none", padding: 0 }}>
+                  </li>
+                  <br />
                   <li>
                     <strong>Project Name:</strong> {projectDetails.name}
                   </li>
-                  <li>
-                    <strong>Review Type:</strong> {projectDetails.review_type}
-                  </li>
-                  <li>
-                    <strong>Created Date:</strong>{" "}
-                    {new Date(
-                      projectDetails.created_datetime
-                    ).toLocaleDateString()}
-                  </li>
-                  <li>
-                    <strong>Description:</strong> {projectDetails.description}
-                  </li>
+                  <br />
+                  {criterion && (
+                    <>
+                      <li>
+                        <strong>Criterion:</strong> {criterion}
+                      </li>
+                    </>
+                  )}
                 </ul>
-              </div>
-            )}
+                {gateUrl && (
+                  <>
+                    This tool has preprocessed your documents and analysed them
+                    against the questions in the
+                    <a href={gateUrl} target="_blank" rel="noopener noreferrer">
+                      {projectDetails.review_type} workbook
+                    </a>
+                    .
+                  </>
+                )}
+              </>
+            </p>
           </div>
         </div>
       </div>

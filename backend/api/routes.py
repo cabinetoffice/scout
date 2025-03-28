@@ -43,6 +43,9 @@ from scout.utils.config import Settings
 from scout.utils.storage.postgres_models import project_users
 from scout.utils.storage import postgres_interface as interface
 from scout.utils.storage.postgres_database import SessionLocal
+import os
+import boto3
+from botocore.exceptions import ClientError
 
 
 router = APIRouter()
@@ -140,8 +143,6 @@ def get_current_user(
             projects = [interface.get_by_id(PyProject, project_id) for project_id in user_projects_ids]
             user.projects = projects
             logger.info(f"user projects: {user.projects}")
-            
-            
             updated_user = interface.update_item(
                 UserUpdate(id=user.id, email=user.email, updated_datetime=datetime.utcnow(), role=user.role)
             )
@@ -426,3 +427,34 @@ def get_all_users_with_projects(
         logger.error(f"Error fetching all users: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching all users: {e}")
 
+
+@router.post("/custom-query")
+def custom_query(
+    query: str,
+    current_user: PyUser = Depends(get_current_user),
+):
+    model_id = os.getenv("AWS_BEDROCK_MODEL_ID")
+    knowledge_id = os.getenv("AWS_BEDROCK_KB_ID")
+
+    if not model_id or not knowledge_id:
+        raise HTTPException(status_code=500, detail="Model ID or Knowledge ID not found in environment variables")
+
+    client = boto3.client('lambda')
+
+    payload = {
+        "query": str(query),
+        "modelId": str(model_id),
+        "knowledgeBaseId": str(knowledge_id)
+    }
+
+    try:
+        response = client.invoke(
+            FunctionName='bd_base_query145',
+            InvocationType='RequestResponse',
+            Payload=json.dumps(payload)
+        )
+        response_payload = json.loads(response['Payload'].read())
+        return response_payload
+    except ClientError as e:
+        logger.error(f"An error occurred while invoking the Lambda function: {e}")
+        raise HTTPException(status_code=500, detail="An error occurred while invoking the Lambda function")

@@ -12,6 +12,10 @@ interface User {
   email: string;
   role: string;
 }
+interface AdminUser {
+  email: string;
+  role: string;
+}
 
 export default function MyApp({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -32,7 +36,7 @@ export default function MyApp({ Component, pageProps }: AppProps) {
         setAdminUsers(adminList);
 
         const match = adminList.find(
-          (adminUser) =>
+          (adminUser: AdminUser) =>
             adminUser.email === userData?.email && adminUser.role === "admin"
         );
         setIsAdmin(!!match);
@@ -124,7 +128,16 @@ export default function MyApp({ Component, pageProps }: AppProps) {
                   isActive("/file-viewer") ? "active" : ""
                 }`}
               >
-                File Viewer
+                Documents
+              </a>
+            </Link>
+            <Link href="/custom-query/" passHref legacyBehavior>
+              <a
+                className={`nav-link ${
+                  isActive("/custom-query") ? "active" : ""
+                }`}
+              >
+                Custom Query
               </a>
             </Link>
             {isAdmin && (

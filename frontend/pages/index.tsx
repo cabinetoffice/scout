@@ -35,7 +35,7 @@ const Summary: React.FC = () => {
         console.log("Fetching results...");
         const results = await fetchReadItemsByAttribute({
           model: "result",
-          filters: { answer: "Negative" },
+          filters: {},
         });
         console.log("Negative results fetched:", results);
 

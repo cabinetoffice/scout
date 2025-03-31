@@ -217,6 +217,7 @@ class ProjectBase(BaseModel):
     updated_datetime: Optional[datetime]
     name: str
     results_summary: Optional[str] = None
+    knowledgebase_id: Optional[str] = None
 
 
 class ProjectCreate(BaseModel):
@@ -226,10 +227,12 @@ class ProjectCreate(BaseModel):
     files: Optional[List["FileBase"]] = Field(default_factory=list)
     criterions: Optional[List["CriterionBase"]] = Field(default_factory=list)
     results: Optional[List["ResultBase"]] = Field(default_factory=list)
+    knowledgebase_id: Optional[str] = None
 
 
 class ProjectUpdate(ProjectCreate):
     id: UUID
+    knowledgebase_id: Optional[str] = None
 
 
 class ProjectFilter(BaseModel):

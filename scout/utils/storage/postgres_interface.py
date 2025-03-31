@@ -227,6 +227,7 @@ def _get_or_create_project(
     item_to_add = sq_model(
         name=model.name,
         results_summary=model.results_summary,
+        knowledgebase_id=model.knowledgebase_id
     )
     db.add(item_to_add)
     db.commit()

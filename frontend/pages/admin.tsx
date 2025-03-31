@@ -11,6 +11,7 @@ import {
   fetchItems,
   fetchAdminUsers,
   fetchProjectsAsAdmin,
+  createUser,
 } from "@/utils/api";
 
 interface Project {
@@ -42,18 +43,18 @@ export default function AdminPage() {
   });
   const [allProjects, setAllProjects] = useState<Project[]>([]);
 
+  const fetchUsers = async () => {
+    try {
+      const adminUsers = await fetchAdminUsers();
+      setUsers(adminUsers);
+    } catch (err) {
+      console.error("Failed to fetch users", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        //console.log("passed in AdminUsers:", adminUsers);
-        const adminUsers = await fetchAdminUsers();
-        setUsers(adminUsers);
-      } catch (err) {
-        console.error("Failed to fetch users", err);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchUsers();
   }, []);
 
@@ -73,9 +74,20 @@ export default function AdminPage() {
 
   const handleSave = async () => {
     if (editingIndex === null) {
-      // Handle adding a new user (not implemented in this example)
-      console.log("Adding new user not implemented");
+      // Handle adding a new user
+      try {
+        const newUser = await createUser({
+          action: "create",
+          emails: [formUser.email],
+        });
+        console.log("New user created:", newUser);
+        fetchUsers();
+      } catch (error) {
+        console.error("Error creating new user:", error);
+        // Handle error appropriately (e.g., show a notification to the user)
+      }
     } else {
+      // Handle editing an existing user
       const updatedUser = { ...formUser };
       const updated = [...users];
       updated[editingIndex] = updatedUser;
@@ -127,6 +139,13 @@ export default function AdminPage() {
     }
 
     setShowForm(false);
+    setEditingIndex(null);
+    setFormUser({
+      id: "",
+      email: "",
+      role: "",
+      projects: [],
+    });
   };
 
   const handleEdit = (index: number) => {
@@ -141,11 +160,23 @@ export default function AdminPage() {
     setShowForm(true);
   };
 
-  const handleDelete = (index: number) => {
-    if (window.confirm(`Delete user "${users[index].email}"?`)) {
-      const updated = [...users];
-      updated.splice(index, 1);
-      setUsers(updated);
+  const handleDelete = async (index: number) => {
+    const userToDelete = users[index];
+    if (window.confirm(`Delete user "${userToDelete.email}"?`)) {
+      try {
+        const deleteUser = await createUser({
+          action: "delete",
+          emails: [userToDelete.email],
+        });
+        console.log("User Delete:", deleteUser);
+
+        const updated = [...users];
+        updated.splice(index, 1);
+        setUsers(updated);
+        console.log(`User ${userToDelete.email} deleted successfully.`);
+      } catch (error) {
+        console.error(`Error deleting user ${userToDelete.email}:`, error);
+      }
     }
   };
 
@@ -354,7 +385,16 @@ export default function AdminPage() {
                 Save
               </button>
               <button
-                onClick={() => setShowForm(false)}
+                onClick={() => {
+                  setShowForm(false);
+                  setEditingIndex(null);
+                  setFormUser({
+                    id: "",
+                    email: "",
+                    role: "",
+                    projects: [],
+                  });
+                }}
                 style={cancelButtonStyle}
               >
                 Cancel

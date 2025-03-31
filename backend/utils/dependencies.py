@@ -14,8 +14,8 @@ settings = get_settings()
 
 
 def get_s3_storage_handler(bucket: str = None):
-    if bucket is None:
-        bucket = settings.BUCKET_NAME
+    # if bucket is None:
+    #     bucket = settings.BUCKET_NAME
 
     return S3StorageHandler(
         bucket_name=bucket,

@@ -115,4 +115,4 @@ class PostgresStorageHandler(BaseStorageHandler):
         self,
         model: UserFilter | ProjectFilter | ResultFilter | ChunkFilter | CriterionFilter | FileFilter,
     ) -> List[PyCriterion | PyChunk | PyFile | PyProject | PyResult | PyUser]:
-        return filter_items(model)
+        return filter_items(model, current_user=None)

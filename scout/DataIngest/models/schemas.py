@@ -99,6 +99,7 @@ class CriterionGate(str, Enum):
     GATE_2 = "GATE_2"
     GATE_3 = "GATE_3"
     GATE_4 = "GATE_4"
+    GATE_5 = "GATE_5"
     IPA_GUIDANCE = "IPA_GUIDANCE"
     CUSTOM = "CUSTOM"
 
@@ -303,7 +304,7 @@ class UserCreate(BaseModel):
 class UserUpdate(UserCreate):
     id: UUID
     updated_datetime: datetime = Field(default_factory=datetime.utcnow)
-    role: str
+    role: Optional[str] = None
 
 class UserFilter(BaseModel):
     email: Optional[str] = None

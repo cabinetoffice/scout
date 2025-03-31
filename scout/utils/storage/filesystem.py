@@ -66,11 +66,11 @@ class S3StorageHandler(BaseStorageHandler):
         else:
             return key
 
-    def get_pre_signed_url(self, key: str):
+    def get_pre_signed_url(self, key: str, bucket: str):
         return URL(
             self.s3_client.generate_presigned_url(
                 "get_object",
-                Params={"Bucket": self.bucket_name, "Key": key},
+                Params={"Bucket": bucket, "Key": key},
             )
         )
 

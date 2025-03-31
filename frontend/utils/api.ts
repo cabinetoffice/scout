@@ -129,3 +129,80 @@ try {
     return null;
 }
 };
+
+export const fetchProjectsAsAdmin = async () => {
+    try {
+        const response = await fetch('/api/admin/projects');
+        if (!response.ok) {
+        if (response.status === 401) {
+            // User is not authenticated
+            return null;
+        }
+        throw new Error('Failed to fetch admin projects');
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching admin projects:', error);
+        return null;
+    }
+    };
+
+interface AssociateUserToProjectRequest {
+    user_id: string;
+    project_id: string;
+}
+
+export const addUserToProject = async (associateUserToProjectRequest: AssociateUserToProjectRequest): Promise<{ message: string }> => {
+    const response = await fetch(`/api/add_user_to_project`, {
+        method: 'POST',
+        body: JSON.stringify(associateUserToProjectRequest),
+    });
+    if (!response.ok) {
+        console.error(`Error adding user ${associateUserToProjectRequest.user_id} to project ${associateUserToProjectRequest.project_id}:`);
+        throw new Error('Failed to add user to project');
+    }
+    return response.json();
+};
+export const removeUserFromProject = async (associateUserToProjectRequest: AssociateUserToProjectRequest): Promise<{ message: string }> => {
+    const response = await fetch(`/api/remove_user_from_project`, {
+        method: 'POST',
+        body: JSON.stringify(associateUserToProjectRequest),
+    });
+    if (!response.ok) {
+        console.error(`Error removing user ${associateUserToProjectRequest.user_id} from project ${associateUserToProjectRequest.project_id}:`);
+        throw new Error('Failed to add user to project');
+    }
+    return response.json();
+};
+
+interface CreateUserRequest {
+    action: 'create' | 'delete';
+    emails: string[];
+}
+
+export const createUser = async (createUserRequest: CreateUserRequest): Promise<{ message: string }> => {
+    const response = await fetch(`/api/auth/create_user`, {
+        method: 'POST',
+        body: JSON.stringify(createUserRequest),
+    });
+    if (!response.ok) {
+        console.error(`Error creating user ${createUserRequest.emails}:`);
+        throw new Error('Failed to create user');
+    }
+    return response.json();
+};
+export const submitQuery = async (query: string): Promise<any> => {
+    const response = await fetch(`/api/custom-query`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query }),
+    });
+  
+    if (!response.ok) {
+      throw new Error("Failed to submit query");
+    }
+  
+    return response.json();
+  };

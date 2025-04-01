@@ -33,10 +33,7 @@ const Summary: React.FC = () => {
     const fetchData = async () => {
       try {
         console.log("Fetching results...");
-        const results = await fetchReadItemsByAttribute({
-          model: "result",
-          filters: {},
-        });
+        const results = await fetchItems("result");
         console.log("Negative results fetched:", results);
 
         const fetchCriteria = async (result: Result) => {
@@ -71,6 +68,19 @@ const Summary: React.FC = () => {
           setProjectDetails(projectData[0]);
           setSummaryText(projectData[0].results_summary);
         }
+
+        const firstCriterionWithGate = criteria.find(
+          (criterion) => criterion.gate
+        );
+        if (firstCriterionWithGate) {
+          console.log("Found criterion with a gate value.");
+          console.log("Gate URL:", firstCriterionWithGate.gate);
+          setGateUrl(firstCriterionWithGate.gate);
+          console.log("gateUrl:", gateUrl);
+        } else {
+          console.warn("No criterion found with a gate value.");
+          setGateUrl(null);
+        }
       } catch (error) {
         console.error("Error fetching data:", error);
       }
@@ -100,26 +110,23 @@ const Summary: React.FC = () => {
             <h2>
               Welcome to <strong>Scout!</strong>
             </h2>
-            <p>
-              {gateUrl && (
-                <>
-                  This AI tool helps you navigate your document set before your
-                  review. Please check the details below are correct before
-                  continuing
-                  <ul>
-                    <strong>Review Type:</strong> {projectDetails.review_type}{" "}
-                    <br />
-                    <strong>Project Name:</strong> {projectDetails.name}
-                  </ul>
-                  This tool has preprocessed your documents and analysed them
-                  against the questions in the
-                  <a href={gateUrl} target="_blank" rel="noopener noreferrer">
-                    {projectDetails.review_type} workbook
-                  </a>
-                  .
-                </>
-              )}
-            </p>
+            <p></p>
+            {gateUrl && (
+              <>
+                This AI tool helps you navigate your document set before your
+                review. Please check the details below are correct before
+                continuing
+                <ul>
+                  <strong>Review Type:</strong> {gateUrl} <br />
+                  <strong>Project Name:</strong> {projectDetails.name}
+                </ul>
+                This tool has preprocessed your documents and analysed them
+                against the questions in the&nbsp;
+                {/* <a href="#" target="_blank" rel="noopener noreferrer"> */}
+                {gateUrl} workbook
+                {/* </a> */}.
+              </>
+            )}
           </div>
         </div>
       </div>

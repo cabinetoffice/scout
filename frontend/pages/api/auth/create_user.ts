@@ -31,12 +31,12 @@ export default async function handler(
                     credentials: "include"
                 }
                 
-                const response = await fetch(process.env.BACKEND_HOST + '/api/rate', requestInit);
+                const response = await fetch(process.env.BACKEND_HOST + '/api/create_user', requestInit);
 
                 if (!response.ok) {
                     console.error(await response.text())
                     console.error(await response.json())
-                    throw new Error('Failed to rate result');
+                    throw new Error('Failed to create user');
                 }
                 res.status(200).send(await response.json())
             } catch (error) {

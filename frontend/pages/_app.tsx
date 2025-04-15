@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import "../public/styles/App.css";
 import "../public/styles/index.css";
 import "../public/styles/FileViewer.css";
+import "../public/styles/CustomQuery.css";
 import { fetchUser, logoutUser, fetchAdminUsers } from "../utils/api";
 
 interface User {
@@ -128,7 +129,16 @@ export default function MyApp({ Component, pageProps }: AppProps) {
                   isActive("/file-viewer") ? "active" : ""
                 }`}
               >
-                File Viewer
+                Documents
+              </a>
+            </Link>
+            <Link href="/custom-query/" passHref legacyBehavior>
+              <a
+                className={`nav-link ${
+                  isActive("/custom-query") ? "active" : ""
+                }`}
+              >
+                Custom Query
               </a>
             </Link>
             {isAdmin && (

@@ -140,7 +140,7 @@ def get_all(
             for item in result:
                 parsed_item = model.model_validate(item)
                 if model is PyFile and parsed_item.s3_key:
-                    parsed_item.url = str(S3StorageHandler().get_pre_signed_url(parsed_item.s3_key))
+                    parsed_item.url = str(S3StorageHandler().get_pre_signed_url(parsed_item.s3_key, parsed_item.s3_bucket))
                 results.append(parsed_item)  # Parse retrieved info into pydantic model and add to list
             return results
         except Exception as _:
@@ -159,7 +159,7 @@ def get_by_id(
                 return None
             parsed_item = model.model_validate(result)
             if model is PyFile and parsed_item.s3_key:
-                parsed_item.url = str(S3StorageHandler().get_pre_signed_url(parsed_item.s3_key))
+                parsed_item.url = str(S3StorageHandler().get_pre_signed_url(parsed_item.s3_key, parsed_item.s3_bucket))
             return parsed_item
         except Exception as _:
             logger.exception(f"Failed to get item by id, {model}, {object_id}")
@@ -227,6 +227,7 @@ def _get_or_create_project(
     item_to_add = sq_model(
         name=model.name,
         results_summary=model.results_summary,
+        knowledgebase_id=model.knowledgebase_id
     )
     db.add(item_to_add)
     db.commit()
@@ -347,7 +348,7 @@ def _get_or_create_file(
     if existing_item:
         parsed_item = PyFile.model_validate(existing_item)
         if parsed_item.s3_key:
-            parsed_item.url = str(S3StorageHandler().get_pre_signed_url(parsed_item.s3_key))
+            parsed_item.url = str(S3StorageHandler().get_pre_signed_url(parsed_item.s3_key, parsed_item.s3_bucket))
         return parsed_item
 
     item_to_add = sq_model(
@@ -374,7 +375,7 @@ def _get_or_create_file(
     db.flush()
     parsed_item = PyFile.model_validate(item_to_add)
     if parsed_item.s3_key:
-        parsed_item.url = str(S3StorageHandler().get_pre_signed_url(parsed_item.s3_key))
+        parsed_item.url = str(S3StorageHandler().get_pre_signed_url(parsed_item.s3_key, parsed_item.s3_bucket))
     return parsed_item
 
 
@@ -554,7 +555,7 @@ def _update_file(model: FileUpdate, db: Session) -> PyFile | None:
 
     parsed_item = PyFile.model_validate(item)
     if parsed_item.s3_key:
-        parsed_item.url = str(S3StorageHandler().get_pre_signed_url(parsed_item.s3_key))
+        parsed_item.url = str(S3StorageHandler().get_pre_signed_url(parsed_item.s3_key, parsed_item.s3_bucket))
     return parsed_item
 
 
@@ -565,15 +566,20 @@ def _update_project(model: ProjectUpdate, db: Session) -> PyProject | None:
     if item is None:
         return None
 
-    item.name = model.name
-    item.results_summary = model.results_summary
-    item.files = [db.query(SqFile).get(file.id) for file in model.files]
-    item.criterions = [db.query(SqCriterion).get(criterion.id) for criterion in model.criterions]
-    item.results = [db.query(SqResult).get(result.id) for result in model.results]
-    item.users = [db.query(SqUser).get(user.id) for user in model.users]
+    update_data = model.model_dump(exclude_unset=True)
+
+    # Define fields that are lists of related objects and their corresponding SQLAlchemy models
+    relation_fields = {
+        'files': SqFile,
+        'criterions': SqCriterion,
+        'results': SqResult,
+        'users': SqUser,
+    }
+
+    apply_updates(item, update_data, db, relation_fields)
 
     db.commit()
-    db.flush()  # Refresh updated item
+    db.flush()
 
     return PyProject.model_validate(item)
 
@@ -585,16 +591,37 @@ def _update_user(model: UserUpdate, db: Session) -> PyUser | None:
     if item is None:
         return None
 
-    item.email = model.email
-    item.role = model.role
-    item.updated_datetime = datetime.utcnow()
+    update_data = model.model_dump(exclude_unset=True)
+
+    apply_updates(
+        item,
+        update_data,
+        db,
+        relation_fields={},  # No many-to-many fields in this example
+        extra_fields={"updated_datetime": datetime.utcnow()}
+    )
 
     db.commit()
     db.refresh(item)
 
     return PyUser.model_validate(item)
 
+def apply_updates(item, update_data: dict, db: Session, relation_fields: dict = {}, extra_fields: dict = {}):
+    for field, value in update_data.items():
+        if field in relation_fields:
+            related_model = relation_fields[field]
+            related_items = [
+                db.query(related_model).get(obj["id"] if isinstance(obj, dict) else obj.id)
+                for obj in value
+            ]
+            setattr(item, field, related_items)
+        else:
+            setattr(item, field, value)
 
+    for field, value in extra_fields.items():
+        setattr(item, field, value)
+
+        
 def _update_result(model: ResultUpdate, db: Session) -> PyResult | None:
     sq_model = pydantic_update_model_to_sqlalchemy_model.get(type(model))
     item = db.query(sq_model).filter(sq_model.id == model.id).one_or_none()
@@ -622,7 +649,7 @@ def filter_items(
             if model_type is UserFilter:
                 return _filter_user(model, db)
             if model_type is CriterionFilter:
-                return _filter_criterion(model, db, current_user)
+                return _filter_criterion(model, db)
             if model_type is ResultFilter:
                 return _filter_result(model, db, current_user)
             if model_type is ChunkFilter:
@@ -696,7 +723,7 @@ def _filter_file(model: FileFilter, db: Session, current_user: PyUser) -> list[P
     for item in result:
         parsed_item = PyFile.model_validate(item)
         if parsed_item.s3_key:
-            parsed_item.url = str(S3StorageHandler().get_pre_signed_url(parsed_item.s3_key))
+            parsed_item.url = str(S3StorageHandler().get_pre_signed_url(parsed_item.s3_key, parsed_item.s3_bucket))
         results.append(PyFile.model_validate(parsed_item))
     return results
 
@@ -723,7 +750,7 @@ def _filter_chunk(model: ChunkFilter, db: Session, current_user: PyUser) -> list
     return results
 
 
-def _filter_criterion(model: CriterionFilter, db: Session, current_user: PyUser) -> list[PyCriterion]:
+def _filter_criterion(model: CriterionFilter, db: Session) -> list[PyCriterion]:
     query = db.query(SqCriterion)
     if model.category:
         query = query.filter(SqCriterion.gate.ilike(f"%{model.gate}%"))
@@ -751,6 +778,12 @@ def _filter_criterion(model: CriterionFilter, db: Session, current_user: PyUser)
 
 def _filter_project(model: ProjectFilter, db: Session, current_user: PyUser) -> list[PyProject]:
     query = db.query(SqProject)
+   
+    # If the current user is not an admin, filter by projects associated with the user
+    if current_user.role != "admin":
+        user_project_ids = [project.id for project in current_user.projects]
+        query = query.filter(SqProject.id.in_(user_project_ids))
+        
     if model.name:
         query = query.filter(SqProject.name.ilike(f"%{model.name}%"))
     if model.results_summary:

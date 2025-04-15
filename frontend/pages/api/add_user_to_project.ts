@@ -31,12 +31,12 @@ export default async function handler(
                     credentials: "include"
                 }
                 
-                const response = await fetch(process.env.BACKEND_HOST + '/api/rate', requestInit);
+                const response = await fetch(process.env.BACKEND_HOST + '/api/add_user_to_project', requestInit);
 
                 if (!response.ok) {
                     console.error(await response.text())
                     console.error(await response.json())
-                    throw new Error('Failed to rate result');
+                    throw new Error('Failed to add user to project');
                 }
                 res.status(200).send(await response.json())
             } catch (error) {

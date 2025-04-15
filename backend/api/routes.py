@@ -19,6 +19,7 @@ from fastapi import Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+from backend.utils.associate_user_project_request import AssociateUserToProjectRequest
 from backend.utils.filters import Filters
 from backend.utils.rating_request import RatingRequest
 from scout.DataIngest.models.schemas import Chunk as PyChunk
@@ -43,7 +44,13 @@ from scout.utils.config import Settings
 from scout.utils.storage.postgres_models import project_users
 from scout.utils.storage import postgres_interface as interface
 from scout.utils.storage.postgres_database import SessionLocal
+import os
+import boto3
+from botocore.exceptions import ClientError
 
+import os
+import boto3
+from botocore.exceptions import ClientError
 
 router = APIRouter()
 
@@ -113,14 +120,14 @@ def get_current_user(
         authorization = f"Bearer {settings.API_JWT_KEY}"
 
     """Extract user information from the OIDC token."""
-    logger.info(f"Incoming Headers: {dict(request.headers)}")
-    logger.info(f"x-amzn-oidc-data Header: {x_amzn_oidc_data}")
-    logger.info(f"Authorization Header: {authorization}")
+    # logger.info(f"Incoming Headers: {dict(request.headers)}")
+    # logger.info(f"x-amzn-oidc-data Header: {x_amzn_oidc_data}")
+    # logger.info(f"Authorization Header: {authorization}")
 
     if not x_amzn_oidc_data and authorization and authorization.startswith("Bearer "):
         token = authorization.split(" ")[1]
         x_amzn_oidc_data = extract_oidc_from_token(token)
-        logger.info(f"Extracted x-amzn-oidc-data from token: {x_amzn_oidc_data}")
+        # logger.info(f"Extracted x-amzn-oidc-data from token: {x_amzn_oidc_data}")
     
     if not x_amzn_oidc_data:
         raise HTTPException(status_code=401, detail="OIDC data not found in headers or token")
@@ -139,9 +146,8 @@ def get_current_user(
             user_projects_ids = [row.project_id for row in SessionLocal().execute(select(project_users).where(project_users.c.user_id == user.id)).all()]
             projects = [interface.get_by_id(PyProject, project_id) for project_id in user_projects_ids]
             user.projects = projects
-            logger.info(f"user projects: {user.projects}")
-            
-            
+            # logger.info(f"user projects: {user.projects}")
+
             updated_user = interface.update_item(
                 UserUpdate(id=user.id, email=user.email, updated_datetime=datetime.utcnow(), role=user.role)
             )
@@ -248,7 +254,7 @@ def read_items_by_attribute(
     request: Request,
     current_user: PyUser = Depends(get_current_user),
 ):
-    logger.info(f"headers: {request.headers}")
+    # logger.info(f"headers: {request.headers}")
     model = models.get(filters.model.lower())
     if not model:
         raise HTTPException(status_code=400, detail="Invalid model name")
@@ -344,7 +350,7 @@ def rate_response(
     result = interface.get_by_id(PyResult, rating_request.result_id)
     if not result:
         return Response("Referenced result not found", 404)
-    existing_rating = interface.filter_items(RatingFilter(user=current_user, result=result, project=result.project))
+    existing_rating = interface.filter_items(RatingFilter(user=current_user, result=result, project=result.project), current_user)
     if existing_rating:
         updated_item = interface.update_item(
             RatingUpdate(
@@ -367,15 +373,14 @@ def rate_response(
         return {"message": f"Rating {response.id} submitted successfully"}
 
 
-@router.post("/add_user_to_project/{user_id}/{project_id}")
+@router.post("/add_user_to_project")
 def add_user_to_project(
-    user_id: UUID,
-    project_id: UUID,
+    associateUserToProjectRequest: AssociateUserToProjectRequest,
     current_user: PyUser = Depends(get_current_user),
 ):
     """Adds a user to a project."""
-    user = interface.get_by_id(PyUser, user_id)
-    project = interface.get_by_id(PyProject, project_id)
+    user = interface.get_by_id(PyUser, associateUserToProjectRequest.user_id)
+    project = interface.get_by_id(PyProject, associateUserToProjectRequest.project_id)
 
     if not user or not project:
         raise HTTPException(status_code=404, detail="User or project not found")
@@ -389,15 +394,14 @@ def add_user_to_project(
     return {"message": f"User {user.id} added to project {project.id}"}
 
 
-@router.delete("/remove_user_from_project/{user_id}/{project_id}")
+@router.post("/remove_user_from_project")
 def remove_user_from_project(
-    user_id: UUID,
-    project_id: UUID,
+    associateUserToProjectRequest: AssociateUserToProjectRequest,
     current_user: PyUser = Depends(get_current_user),
 ):
     """Removes a user from a project."""
-    user = interface.get_by_id(PyUser, user_id)
-    project = interface.get_by_id(PyProject, project_id)
+    user = interface.get_by_id(PyUser, associateUserToProjectRequest.user_id)
+    project = interface.get_by_id(PyProject, associateUserToProjectRequest.project_id)
 
     if not user or not project:
         raise HTTPException(status_code=404, detail="User or project not found")
@@ -426,3 +430,87 @@ def get_all_users_with_projects(
         logger.error(f"Error fetching all users: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching all users: {e}")
 
+@router.get("/admin/projects")
+def get_all_projects(
+    request: Request,
+    current_user: PyUser = Depends(get_current_user),
+):
+    logger.log(level=logging.INFO, msg=request)
+    
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    try:
+        projects = interface.filter_items(ProjectFilter(), current_user)
+
+        return projects
+    except Exception as e:
+        logger.error(f"Error fetching all projects: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching all projects: {e}")
+
+@router.post("/custom-query")
+def custom_query(
+    query: str,
+    current_user: PyUser = Depends(get_current_user),
+):
+    model_id = os.getenv("AWS_BEDROCK_MODEL_ID")
+    knowledge_id = os.getenv("AWS_BEDROCK_KB_ID")
+
+    if not model_id or not knowledge_id:
+        raise HTTPException(status_code=500, detail="Model ID or Knowledge ID not found in environment variables")
+
+    client = boto3.client('lambda')
+
+    payload = {
+        "query": str(query),
+        "modelId": str(model_id),
+        "knowledgeBaseId": str(knowledge_id)
+    }
+
+    try:
+        response = client.invoke(
+            FunctionName='bd_base_query145',
+            InvocationType='RequestResponse',
+            Payload=json.dumps(payload)
+        )
+        response_payload = json.loads(response['Payload'].read())
+        return response_payload
+    except ClientError as e:
+        logger.error(f"An error occurred while invoking the Lambda function: {e}")
+        raise HTTPException(status_code=500, detail="An error occurred while invoking the Lambda function")
+
+class CreateUserRequest(BaseModel):
+    action: str
+    emails: List[str]
+
+@router.post("/create_user")
+def manage_cognito_users(
+    request: CreateUserRequest,
+    current_user: PyUser = Depends(get_current_user),
+):
+    lambda_function_name = 'create_user73b'
+
+    client = boto3.client('lambda')
+
+    payload = {
+        "action": request.action,
+        "emails": request.emails
+    }
+
+    try:
+        response = client.invoke(
+            FunctionName=lambda_function_name,
+            InvocationType='RequestResponse',
+            Payload=json.dumps(payload)
+        )
+        response_payload = json.loads(response['Payload'].read())
+        
+        user_obj = interface.get_or_create_item(UserCreate(email=request.emails[0]))
+
+        if request.action == "delete":
+            interface.delete_item(user_obj)
+        
+        return response_payload
+    except ClientError as e:
+        logger.error(f"Error invoking Lambda function '{lambda_function_name}': {e}")
+        raise HTTPException(status_code=500, detail="Failed to invoke Create User Lambda function")

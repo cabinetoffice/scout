@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError
 from langchain_core.vectorstores import VectorStore
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from scout.DataIngest.models.schemas import Chunk, ChunkBase, ChunkCreate, CriterionCreate, File, ProjectCreate, ResultCreate
+from scout.DataIngest.models.schemas import Chunk, ChunkBase, ChunkCreate, CriterionCreate, File, Project, ProjectCreate, ProjectUpdate, ResultCreate
 from scout.LLMFlag.prompts import (
     CORE_SCOUT_PERSONA,
     DOCUMENT_EXTRACT_PROMPT,
@@ -292,7 +292,16 @@ class MainEvaluator(BaseEvaluator):
         logger.info("Generating summary of answers...")
         # Generate summary of answers
         summary = self.generate_summary(question_answer_pairs)
-        self.project.results_summary = summary
+        
+        if isinstance(self.project, Project):
+            self.project = ProjectUpdate(
+                id=self.project.id,
+                name=self.project.name,
+                results_summary=summary,
+                results=results
+            )
+        else:
+            self.project.results_summary = summary
         self.storage_handler.update_item(self.project)
         return results
 
@@ -303,6 +312,9 @@ class MainEvaluator(BaseEvaluator):
 
         formatted_input = ", ".join(
             [f"Question: {qa[0]}\nAnswer: {qa[1]}" for qa in question_answer_pairs])
+        
+        
+        logger.info(f"generate_summary formatted_input...{formatted_input}")
         
         # Create the message for Bedrock using Claude's expected format
         summary_messages = [

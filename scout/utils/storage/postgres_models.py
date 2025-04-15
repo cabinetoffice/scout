@@ -67,6 +67,7 @@ class CriterionGate(enum.Enum):
     GATE_2 = "GATE_2"
     GATE_3 = "GATE_3"
     GATE_4 = "GATE_4"
+    GATE_5 = "GATE_5"
     IPA_GUIDANCE = "IPA_GUIDANCE"
     CUSTOM = "CUSTOM"
 
@@ -81,6 +82,8 @@ class CriterionGate(enum.Enum):
             return CriterionGate.GATE_3
         if value == "GATE_4":
             return CriterionGate.GATE_4
+        if value == "GATE_5":
+            return CriterionGate.GATE_5
         if value == "IPA_GUIDANCE":
             return CriterionGate.IPA_GUIDANCE
         if value == "CUSTOM":
@@ -176,6 +179,7 @@ class Project(Base):
     results_summary = Column(String, nullable=True, default="")
     created_datetime = Column(DateTime(timezone=True), server_default=func.now())
     updated_datetime = Column(DateTime(timezone=True), onupdate=func.now())
+    knowledgebase_id = Column(String, nullable=True)
 
     files = relationship("File", back_populates="project")
     criterions = relationship("Criterion", secondary="project_criterions", back_populates="projects")

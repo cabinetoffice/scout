@@ -108,7 +108,6 @@ const Summary: React.FC = () => {
   return (
     <div>
       <div>
-        <br />
         <div
           className="summary-card"
           style={{

@@ -1,4 +1,4 @@
-"use client"; // This is a client component
+"use client";
 
 import React, { useEffect, useState, useContext } from "react";
 import PieChart from "../components/PieChart";
@@ -27,6 +27,7 @@ const Summary: React.FC = () => {
   const [summaryText, setSummaryText] = useState<string>("");
   const [gateUrl, setGateUrl] = useState<string | null>(null);
   const [categories, setCategories] = useState<{ [key: string]: number }>({});
+  const [criterion, setCriterion] = useState<string>("");
   const [projectDetails, setProjectDetails] = useState<any>(null);
 
   useEffect(() => {
@@ -34,7 +35,7 @@ const Summary: React.FC = () => {
       try {
         console.log("Fetching results...");
         const results = await fetchItems("result");
-        console.log("Negative results fetched:", results);
+        console.log("Results fetched:", results);
 
         const fetchCriteria = async (result: Result) => {
           return await fetchItems("criterion", result.criterion.id);
@@ -51,12 +52,23 @@ const Summary: React.FC = () => {
           categoryCount[category] = (categoryCount[category] || 0) + 1;
         });
 
-        setChartLabels(Object.keys(categoryCount));
-        setChartData(Object.values(categoryCount));
-        setCategories(categoryCount);
+        const answerCount: { [key: string]: number } = {};
+        results.forEach((result: Result) => {
+          answerCount[result.answer] = (answerCount[result.answer] || 0) + 1;
+        });
 
-        console.log("Chart labels:", Object.keys(categoryCount));
-        console.log("Chart data:", Object.values(categoryCount));
+        if (results.length > 0) {
+          const firstResult = results[0];
+          if (firstResult.criterion && firstResult.criterion.gate) {
+            setCriterion(firstResult.criterion.gate);
+          }
+        }
+
+        setChartLabels(Object.keys(answerCount));
+        setChartData(Object.values(answerCount));
+
+        console.log("Chart labels:", Object.keys(answerCount));
+        console.log("Chart data:", Object.values(answerCount));
 
         // Fetching the project details
         console.log("Fetching project details...");
@@ -118,6 +130,7 @@ const Summary: React.FC = () => {
                 continuing
                 <ul>
                   <strong>Review Type:</strong> {gateUrl} <br />
+                  <br />
                   <strong>Project Name:</strong> {projectDetails.name}
                 </ul>
                 This tool has preprocessed your documents and analysed them
@@ -143,14 +156,15 @@ const Summary: React.FC = () => {
           <PieChart data={chartData} labels={chartLabels} />
         </div>
       </div>
-      {Object.keys(categories).map((category) => (
+      {chartLabels.map((label, index) => (
         <div
           className="summary-card"
-          key={category}
+          key={label}
           style={{ marginBottom: "20px" }}
         >
-          <h2>{category}</h2>
-          <p>{`Number of negative results: ${categories[category]}`}</p>
+          <h2>{label}</h2>
+          <p>{`Count: ${chartData[index]}`}</p>
+          <a href={`/results?answer=${label}`}>View {label} results</a>
         </div>
       ))}
     </div>

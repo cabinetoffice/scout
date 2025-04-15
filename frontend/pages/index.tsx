@@ -1,4 +1,4 @@
-"use client"; // This is a client component
+"use client";
 
 import React, { useEffect, useState, useContext } from "react";
 import PieChart from "../components/PieChart";
@@ -27,17 +27,15 @@ const Summary: React.FC = () => {
   const [summaryText, setSummaryText] = useState<string>("");
   const [gateUrl, setGateUrl] = useState<string | null>(null);
   const [categories, setCategories] = useState<{ [key: string]: number }>({});
+  const [criterion, setCriterion] = useState<string>("");
   const [projectDetails, setProjectDetails] = useState<any>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         console.log("Fetching results...");
-        const results = await fetchReadItemsByAttribute({
-          model: "result",
-          filters: {},
-        });
-        console.log("Negative results fetched:", results);
+        const results = await fetchItems("result");
+        console.log("Results fetched:", results);
 
         const fetchCriteria = async (result: Result) => {
           return await fetchItems("criterion", result.criterion.id);
@@ -54,12 +52,23 @@ const Summary: React.FC = () => {
           categoryCount[category] = (categoryCount[category] || 0) + 1;
         });
 
-        setChartLabels(Object.keys(categoryCount));
-        setChartData(Object.values(categoryCount));
-        setCategories(categoryCount);
+        const answerCount: { [key: string]: number } = {};
+        results.forEach((result: Result) => {
+          answerCount[result.answer] = (answerCount[result.answer] || 0) + 1;
+        });
 
-        console.log("Chart labels:", Object.keys(categoryCount));
-        console.log("Chart data:", Object.values(categoryCount));
+        if (results.length > 0) {
+          const firstResult = results[0];
+          if (firstResult.criterion && firstResult.criterion.gate) {
+            setCriterion(firstResult.criterion.gate);
+          }
+        }
+
+        setChartLabels(Object.keys(answerCount));
+        setChartData(Object.values(answerCount));
+
+        console.log("Chart labels:", Object.keys(answerCount));
+        console.log("Chart data:", Object.values(answerCount));
 
         // Fetching the project details
         console.log("Fetching project details...");
@@ -70,6 +79,19 @@ const Summary: React.FC = () => {
         if (projectData.length > 0) {
           setProjectDetails(projectData[0]);
           setSummaryText(projectData[0].results_summary);
+        }
+
+        const firstCriterionWithGate = criteria.find(
+          (criterion) => criterion.gate
+        );
+        if (firstCriterionWithGate) {
+          console.log("Found criterion with a gate value.");
+          console.log("Gate URL:", firstCriterionWithGate.gate);
+          setGateUrl(firstCriterionWithGate.gate);
+          console.log("gateUrl:", gateUrl);
+        } else {
+          console.warn("No criterion found with a gate value.");
+          setGateUrl(null);
         }
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -100,26 +122,24 @@ const Summary: React.FC = () => {
             <h2>
               Welcome to <strong>Scout!</strong>
             </h2>
-            <p>
-              {gateUrl && (
-                <>
-                  This AI tool helps you navigate your document set before your
-                  review. Please check the details below are correct before
-                  continuing
-                  <ul>
-                    <strong>Review Type:</strong> {projectDetails.review_type}{" "}
-                    <br />
-                    <strong>Project Name:</strong> {projectDetails.name}
-                  </ul>
-                  This tool has preprocessed your documents and analysed them
-                  against the questions in the
-                  <a href={gateUrl} target="_blank" rel="noopener noreferrer">
-                    {projectDetails.review_type} workbook
-                  </a>
-                  .
-                </>
-              )}
-            </p>
+            <p></p>
+            {gateUrl && (
+              <>
+                This AI tool helps you navigate your document set before your
+                review. Please check the details below are correct before
+                continuing
+                <ul>
+                  <strong>Review Type:</strong> {gateUrl} <br />
+                  <br />
+                  <strong>Project Name:</strong> {projectDetails.name}
+                </ul>
+                This tool has preprocessed your documents and analysed them
+                against the questions in the&nbsp;
+                {/* <a href="#" target="_blank" rel="noopener noreferrer"> */}
+                {gateUrl} workbook
+                {/* </a> */}.
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -136,14 +156,15 @@ const Summary: React.FC = () => {
           <PieChart data={chartData} labels={chartLabels} />
         </div>
       </div>
-      {Object.keys(categories).map((category) => (
+      {chartLabels.map((label, index) => (
         <div
           className="summary-card"
-          key={category}
+          key={label}
           style={{ marginBottom: "20px" }}
         >
-          <h2>{category}</h2>
-          <p>{`Number of negative results: ${categories[category]}`}</p>
+          <h2>{label}</h2>
+          <p>{`Count: ${chartData[index]}`}</p>
+          <a href={`/results?answer=${label}`}>View {label} results</a>
         </div>
       ))}
     </div>

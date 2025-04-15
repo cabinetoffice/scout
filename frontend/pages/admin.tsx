@@ -73,6 +73,10 @@ export default function AdminPage() {
   }, []);
 
   const handleSave = async () => {
+    if ((formUser.projects?.length || 0) > 1) {
+      window.alert("Scout can only assign 1 project per user at this time");
+      return;
+    }
     if (editingIndex === null) {
       // Handle adding a new user
       try {

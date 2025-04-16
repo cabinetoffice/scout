@@ -5,8 +5,9 @@ import { AgGridReact } from "ag-grid-react";
 import { useRouter } from "next/router";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
+import styles from "../public/styles/Results.module.css";
 import { ColDef, ICellRendererParams } from "ag-grid-community";
-import { Modal, Box, Typography, IconButton, Chip } from "@mui/material";
+import { Modal, Typography, IconButton, Chip } from "@mui/material";
 import {
   Close as CloseIcon,
   ThumbUp as ThumbUpIcon,
@@ -86,21 +87,6 @@ interface TransformedResult {
   id: string;
 }
 
-const style = {
-  position: "absolute" as "absolute",
-  top: "50%",
-  left: "50%",
-  transform: "translate(-50%, -50%)",
-  width: "90%",
-  maxWidth: 600,
-  maxHeight: "85vh",
-  overflowY: "auto",
-  bgcolor: "background.paper",
-  borderRadius: "10px",
-  boxShadow: 24,
-  p: 4,
-};
-
 const ResultsTable: React.FC = () => {
   const [allResults, setAllResults] = useState<TransformedResult[]>([]);
   const [results, setResults] = useState<TransformedResult[]>([]);
@@ -146,92 +132,99 @@ const ResultsTable: React.FC = () => {
     }
   };
 
+  const getStatusChipColor = (status: string) => {
+    switch (status) {
+      case "Positive":
+        return "green";
+      case "Neutral":
+        return "orange";
+      case "Negative":
+        return "red";
+      default:
+        return "default";
+    }
+  };
+
   const ModalContent = () => {
     if (!selectedRow) return null;
 
     return (
-      <Box sx={style}>
-        <IconButton
-          aria-label="close"
-          onClick={handleClose}
-          sx={{
-            position: "absolute",
-            right: 8,
-            top: 8,
-            color: (theme) => theme.palette.grey[500],
-          }}
-        >
-          <CloseIcon />
-        </IconButton>
-        {selectedRow && (
-          <div>
-            <Typography variant="subtitle1">
-              <b>{selectedRow.Criterion.question}</b>
-            </Typography>
-            <Typography variant="subtitle1" sx={{ mt: 2 }}>
-              <Box sx={{ display: "flex", gap: 1 }}>
-                <Chip
-                  label={selectedRow.Status}
-                  variant="outlined"
-                  style={{
-                    backgroundColor: getStatusChipColor(selectedRow.Status),
-                    color: "white",
-                  }}
-                />
-                <Chip
-                  label={selectedRow.Category}
-                  variant="outlined"
-                  style={{ backgroundColor: "lightgrey" }}
-                />
-                <Chip
-                  label={selectedRow.Gate}
-                  variant="outlined"
-                  style={{ backgroundColor: "lightgrey" }}
-                />
-              </Box>
-            </Typography>
-
-            <Typography variant="subtitle2" sx={{ mt: 2 }}>
-              <b>Evidence Considered</b>
-            </Typography>
-            <Typography variant="body1">
-              {formatEvidence(selectedRow.Evidence)}
-            </Typography>
-            <Typography variant="subtitle2" sx={{ mt: 2 }}>
-              <b>AI Justification:</b>
-            </Typography>
-            <Typography variant="body1">{selectedRow.Justification}</Typography>
-            <Typography variant="subtitle2" sx={{ mt: 2 }}>
-              <b>Sources:</b>
-            </Typography>
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1 }}>
-              {selectedRow.Sources.map((source: Source) => (
-                <Chip
-                  key={source.chunk_id}
-                  label={source.fileName}
-                  onClick={() => handleCitationClick(source.chunk_id)}
-                  style={{ cursor: "pointer" }}
-                />
-              ))}
-            </Box>
-
-            <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
-              <IconButton
-                onClick={() => handleRating(true)}
-                aria-label="thumbs up"
-              >
-                <ThumbUpIcon style={thumbsUpColour} />
-              </IconButton>
-              <IconButton
-                onClick={() => handleRating(false)}
-                aria-label="thumbs down"
-              >
-                <ThumbDownIcon style={thumbsDownColour} />
-              </IconButton>
-            </Box>
+      <div className={styles.modalContainer}>
+        <div className={styles.modalHeader}>
+          <IconButton
+            aria-label="close"
+            onClick={handleClose}
+            className={styles.closeButton}
+          >
+            <CloseIcon />
+          </IconButton>
+          <Typography variant="subtitle1">
+            <b>{selectedRow.Criterion.question}</b>
+          </Typography>
+          <div className={styles.chipsContainer}>
+            <Chip
+              label={selectedRow.Status}
+              variant="outlined"
+              style={{
+                backgroundColor: getStatusChipColor(selectedRow.Status),
+                color: "white",
+              }}
+            />
+            <Chip
+              label={selectedRow.Category}
+              variant="outlined"
+              style={{ backgroundColor: "lightgrey" }}
+            />
+            <Chip
+              label={selectedRow.Gate}
+              variant="outlined"
+              style={{ backgroundColor: "lightgrey" }}
+            />
           </div>
-        )}
-      </Box>
+        </div>
+
+        <div className={styles.modalContent}>
+          <Typography variant="subtitle2" className={styles.sectionTitle}>
+            Evidence Considered
+          </Typography>
+          <Typography variant="body1" className={styles.sectionText}>
+            {formatEvidence(selectedRow.Evidence)}
+          </Typography>
+
+          <Typography variant="subtitle2" className={styles.sectionTitle}>
+            AI Justification:
+          </Typography>
+          <Typography variant="body1" className={styles.sectionText}>
+            {selectedRow.Justification}
+          </Typography>
+
+          <Typography variant="subtitle2" className={styles.sectionTitle}>
+            Sources:
+          </Typography>
+          <div className={styles.sourcesContainer}>
+            {selectedRow.Sources.map((source: Source) => (
+              <Chip
+                key={source.chunk_id}
+                label={source.fileName}
+                onClick={() => handleCitationClick(source.chunk_id)}
+                style={{ cursor: "pointer", marginBottom: "4px" }}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className={styles.modalFooter}>
+          <IconButton onClick={() => handleRating(true)} aria-label="thumbs up">
+            <ThumbUpIcon style={thumbsUpColour} />
+          </IconButton>
+          <IconButton
+            onClick={() => handleRating(false)}
+            aria-label="thumbs down"
+          >
+            <ThumbDownIcon style={thumbsDownColour} />
+          </IconButton>
+        </div>
+      </div>
     );
   };
 
@@ -417,19 +410,6 @@ const ResultsTable: React.FC = () => {
     setOpen(true);
   };
 
-  const getStatusChipColor = (status: string) => {
-    switch (status) {
-      case "Positive":
-        return "green";
-      case "Neutral":
-        return "orange";
-      case "Negative":
-        return "red";
-      default:
-        return "default";
-    }
-  };
-
   const formatEvidence = (evidence: string) => {
     return evidence.split("_").map((item, index) => (
       <React.Fragment key={index}>
@@ -464,14 +444,11 @@ const ResultsTable: React.FC = () => {
   };
 
   return (
-    <div style={{ width: "100%", height: "100vh" }}>
+    <div className={styles.tableContainer}>
       {isLoading ? (
         <MagnifyingGlassLoader />
       ) : (
-        <div
-          className="ag-theme-alpine"
-          style={{ height: "calc(100% - 64px)", width: "100%" }}
-        >
+        <div className={`ag-theme-alpine ${styles.gridContainer}`}>
           <AgGridReact
             rowData={results}
             columnDefs={columnDefs}

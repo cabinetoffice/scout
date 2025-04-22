@@ -40,6 +40,7 @@ export default function MyApp({ Component, pageProps }: AppProps) {
             adminUser.email === userData?.email && adminUser.role === "admin"
         );
         setIsAdmin(!!match);
+        
         console.log("setIsAdmin:", !!match);
       } catch (error) {
         console.error("Error fetching user or admin users:", error);

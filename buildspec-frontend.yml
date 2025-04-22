@@ -13,20 +13,15 @@ phases:
 
   build:
     commands:
-      - echo "SKIP Building a Docker image for backend"
-      # - docker build -t $ECR_REPOSITORY_BACKEND_URL:latest -f backend/Dockerfile .
       - echo "Building a Docker image for frontend"
       - docker build -t $ECR_REPOSITORY_FRONTEND_URL:latest -f frontend/Dockerfile frontend
 
   post_build:
     commands:
       - echo "Build completed on `date`"
-      - echo "SKIP Pushing the backend Docker image..."
-      # - docker push $ECR_REPOSITORY_BACKEND_URL:latest
       - echo "Pushing the frontend Docker image..."
       - docker push $ECR_REPOSITORY_FRONTEND_URL:latest
       - echo "Writing image definitions file for ECS deployment..."
-      # - printf '[{"name":"backend","imageUri":"%s"}]' $ECR_REPOSITORY_BACKEND_URL:latest > imagedefinitions.json
       - printf '[{"name":"frontend","imageUri":"%s"}]' $ECR_REPOSITORY_FRONTEND_URL:latest >> imagedefinitions.json
       - echo Contents of imagedefinitions.json:
       - cat imagedefinitions.json

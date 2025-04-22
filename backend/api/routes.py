@@ -1,5 +1,5 @@
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import logging
 import typing
@@ -10,7 +10,7 @@ from uuid import UUID
 from sqlalchemy import select
 
 import requests
-from fastapi import APIRouter
+from fastapi import APIRouter, UploadFile, File
 from fastapi import Depends
 from fastapi import Header
 from fastapi import HTTPException
@@ -167,8 +167,7 @@ def is_item_in_user_projects(
     user_projects = [interface.get_by_id(PyProject, project_id) for project_id in user_projects_ids]
     user_project_names = [project.name for project in user_projects]
 
-    
-    
+
     if type(item) is PyProject:
         item = typing.cast(PyProject, item)
         if item.name in user_project_names:
@@ -454,10 +453,15 @@ def custom_query(
     current_user: PyUser = Depends(get_current_user),
 ):
     model_id = os.getenv("AWS_BEDROCK_MODEL_ID")
-    knowledge_id = os.getenv("AWS_BEDROCK_KB_ID")
 
+    user_projects = current_user.projects
+    if not user_projects:
+        raise HTTPException(status_code=404, detail="No projects found for the current user.")
+    
+    knowledge_id = user_projects[0].knowledgebase_id
+    
     if not model_id or not knowledge_id:
-        raise HTTPException(status_code=500, detail="Model ID or Knowledge ID not found in environment variables")
+        raise HTTPException(status_code=500, detail="Model ID or Knowledge ID not found in environment variables or project table")
 
     client = boto3.client('lambda')
 
@@ -467,6 +471,8 @@ def custom_query(
         "knowledgeBaseId": str(knowledge_id)
     }
 
+    logger.info(f"bedrock query payload: {payload}")
+    
     try:
         response = client.invoke(
             FunctionName='bd_base_query145',
@@ -514,3 +520,99 @@ def manage_cognito_users(
     except ClientError as e:
         logger.error(f"Error invoking Lambda function '{lambda_function_name}': {e}")
         raise HTTPException(status_code=500, detail="Failed to invoke Create User Lambda function")
+
+def get_s3_client():
+    """
+    Creates and returns an S3 client.
+    """
+    try:
+        s3_client = boto3.client('s3')
+        return s3_client
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating S3 client: {e}")
+
+@router.get("/admin/files")
+def get_all_files(
+    request: Request,
+    current_user: PyUser = Depends(get_current_user),
+    s3_client: boto3.client = Depends(get_s3_client),
+):
+
+    logger.log(level=logging.INFO, msg=request)
+    
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    try:
+        response = s3_client.list_objects_v2(Bucket=os.getenv("BUCKET_NAME"))
+
+        files = []
+        for item in response.get("Contents", []):
+            files.append({
+                "key": item["Key"],
+                "lastModified": item["LastModified"].isoformat(),
+                "size": item["Size"]
+            })
+
+        return files
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing files: {str(e)}")
+
+@router.post("/admin/upload")
+async def upload_files(files: List[UploadFile] = File(...),
+    current_user: PyUser = Depends(get_current_user),
+    s3_client: boto3.client = Depends(get_s3_client),):
+
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    uploaded = []
+    for file in files:
+        try:
+            s3_client.upload_fileobj(file.file, os.getenv("BUCKET_NAME"), file.filename)
+            uploaded.append(file.filename)
+        except (ClientError) as e:
+            logging.error(f"Upload failed: {file.filename}, error: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to upload {file.filename}")
+    return {"uploaded": uploaded}
+
+@router.get("/admin/delete")
+def rate_response(
+    key: str,
+    current_user: PyUser = Depends(get_current_user),
+    s3_client: boto3.client = Depends(get_s3_client),):
+
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    if not key:
+        raise HTTPException(status_code=400, detail="Missing file key")
+
+    try:
+        s3_client.delete_object(Bucket=os.getenv("BUCKET_NAME"), Key=key)
+        return {"deleted": key}
+    except (ClientError) as e:
+        logging.error(f"Delete failed: {key}, error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete file")
+    
+@router.get("/admin/signed_url")
+def get_signed_url(key: str = Query(...),
+    current_user: PyUser = Depends(get_current_user),
+    s3_client: boto3.client = Depends(get_s3_client),):
+    
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    try:
+        url = s3_client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": os.getenv("BUCKET_NAME"), "Key": key},
+            ExpiresIn=timedelta(minutes=5).seconds,
+        )
+        return {"url": url}
+    except (ClientError) as e:
+        logging.error(f"Signed URL generation failed for {key}: {e}")
+        raise HTTPException(status_code=500, detail="Could not generate signed URL")
+    
+    

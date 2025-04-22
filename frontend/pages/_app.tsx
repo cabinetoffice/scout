@@ -21,45 +21,67 @@ export default function MyApp({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [showContextMenu, setShowContextMenu] = useState(false);
-  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const [showUserContextMenu, setShowUserContextMenu] = useState(false);
+  const [showDocumentsSubmenu, setShowDocumentsSubmenu] = useState(false); // State for Documents submenu
+  const userContextMenuRef = useRef<HTMLDivElement>(null);
   const userCircleRef = useRef<HTMLDivElement>(null);
+  const documentsMenuRef = useRef<HTMLDivElement>(null); // Ref for Documents menu item
+  const documentsSubmenuRef = useRef<HTMLDivElement>(null); // Ref for Documents submenu
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminUsers, setAdminUsers] = useState<User[]>([]);
 
   useEffect(() => {
     const getUserDetails = async () => {
+      setLoading(true); // Start loading
       try {
         const userData = await fetchUser();
         setUser(userData);
-        const adminList = await fetchAdminUsers();
-        setAdminUsers(adminList);
+        if (userData) {
+          // Only fetch admin users if user is logged in
+          const adminList = await fetchAdminUsers();
+          setAdminUsers(adminList);
 
-        const match = adminList.find(
-          (adminUser: AdminUser) =>
-            adminUser.email === userData?.email && adminUser.role === "admin"
-        );
-        setIsAdmin(!!match);
-        
-        console.log("setIsAdmin:", !!match);
+          const match = adminList.find(
+            (adminUser: AdminUser) =>
+              adminUser.email === userData?.email && adminUser.role === "admin"
+          );
+          setIsAdmin(!!match);
+          console.log("setIsAdmin:", !!match);
+        } else {
+          setIsAdmin(false); // Not admin if not logged in
+        }
       } catch (error) {
         console.error("Error fetching user or admin users:", error);
+        setUser(null); // Ensure user is null on error
+        setIsAdmin(false);
       } finally {
         setLoading(false);
       }
     };
 
     getUserDetails();
+  }, []); // Fetch user details only once on mount
 
-    // Add click outside listener to close context menu
+  useEffect(() => {
+    // Add click outside listener to close menus
     const handleClickOutside = (event: MouseEvent) => {
+      // Close user context menu
       if (
-        contextMenuRef.current &&
-        !contextMenuRef.current.contains(event.target as Node) &&
+        userContextMenuRef.current &&
+        !userContextMenuRef.current.contains(event.target as Node) &&
         userCircleRef.current &&
         !userCircleRef.current.contains(event.target as Node)
       ) {
-        setShowContextMenu(false);
+        setShowUserContextMenu(false);
+      }
+      // Close documents submenu
+      if (
+        documentsSubmenuRef.current &&
+        !documentsSubmenuRef.current.contains(event.target as Node) &&
+        documentsMenuRef.current &&
+        !documentsMenuRef.current.contains(event.target as Node)
+      ) {
+        setShowDocumentsSubmenu(false);
       }
     };
 
@@ -67,45 +89,58 @@ export default function MyApp({ Component, pageProps }: AppProps) {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, []);
+  }, []); // Add/remove listener only once
 
-  const isActive = (pathname: string) => router.pathname === pathname;
+  // Close Documents submenu when route changes
+  useEffect(() => {
+    const handleRouteChange = () => {
+      setShowDocumentsSubmenu(false);
+    };
+    router.events.on("routeChangeComplete", handleRouteChange);
+    return () => {
+      router.events.off("routeChangeComplete", handleRouteChange);
+    };
+  }, [router.events]);
+
+  const isActive = (pathname: string | string[]) => {
+    if (Array.isArray(pathname)) {
+      return pathname.some((p) => router.pathname.startsWith(p));
+    }
+    return router.pathname === pathname;
+  };
 
   const handleLogout = async () => {
-    // Close context menu
-    setShowContextMenu(false);
-
-    // Clear cookies server-side
+    setShowUserContextMenu(false);
     try {
       await logoutUser();
     } catch (error) {
       console.error("Error during logout:", error);
-      // Handle logout error (e.g., display a message)
     }
-
-    // Redirect to Cognito logout
-    window.location.href = "/api/auth/logout";
+    window.location.href = "/api/auth/logout"; // Redirect to backend logout
   };
 
-  const toggleContextMenu = () => {
-    setShowContextMenu((prev) => !prev);
+  const toggleUserContextMenu = () => {
+    setShowUserContextMenu((prev) => !prev);
   };
 
-  // Function to get user initials
+  const toggleDocumentsSubmenu = (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent default link behavior if any
+    setShowDocumentsSubmenu((prev) => !prev);
+  };
+
   const getUserInitials = () => {
     if (!user || !user.email) return "?";
-
-    // Extract name from email (assuming format: firstname.lastname@domain.com)
     const emailName = user.email.split("@")[0];
     const nameParts = emailName.split(".");
-
     if (nameParts.length >= 2) {
       return (nameParts[0][0] + nameParts[1][0]).toUpperCase();
     } else {
-      // If email doesn't contain a period, use first two letters
       return emailName.substring(0, 2).toUpperCase();
     }
   };
+
+  // Define paths for the Documents section
+  const documentPaths = ["/file-viewer", "/files-upload"];
 
   return (
     <div className="App">
@@ -113,26 +148,60 @@ export default function MyApp({ Component, pageProps }: AppProps) {
         <div className="header-content">
           <h1>🔎 IPA Scout</h1>
           <nav className="header-nav">
+            {/* Summary Link */}
             <Link href="/" passHref legacyBehavior>
               <a className={`nav-link ${isActive("/") ? "active" : ""}`}>
                 Summary
               </a>
             </Link>
+
+            {/* Results Link */}
             <Link href="/results" passHref legacyBehavior>
               <a className={`nav-link ${isActive("/results") ? "active" : ""}`}>
                 Results
               </a>
             </Link>
-            <Link href="/file-viewer/" passHref legacyBehavior>
+
+            {/* Documents Dropdown */}
+            <div className="nav-item-container" ref={documentsMenuRef}>
               <a
+                href="#" // Use href="#" or similar for non-navigating link
+                onClick={toggleDocumentsSubmenu}
                 className={`nav-link ${
-                  isActive("/file-viewer") ? "active" : ""
+                  isActive(documentPaths) ? "active" : ""
                 }`}
               >
-                Documents
+                Documents {showDocumentsSubmenu ? "▲" : "▼"}
               </a>
-            </Link>
-            <Link href="/custom-query/" passHref legacyBehavior>
+              {showDocumentsSubmenu && (
+                <div className="submenu" ref={documentsSubmenuRef}>
+                  <Link href="/file-viewer" passHref legacyBehavior>
+                    <a
+                      className={`submenu-link ${
+                        isActive("/file-viewer") ? "active" : ""
+                      }`}
+                    >
+                      Viewer
+                    </a>
+                  </Link>
+                  {/* Conditionally render File Browser link based on isAdmin status */}
+                  {isAdmin && (
+                    <Link href="/files-upload" passHref legacyBehavior>
+                      <a
+                        className={`submenu-link ${
+                          isActive("/files-upload") ? "active" : ""
+                        }`}
+                      >
+                        File Upload (Admin)
+                      </a>
+                    </Link>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Custom Query Link */}
+            <Link href="/custom-query" passHref legacyBehavior>
               <a
                 className={`nav-link ${
                   isActive("/custom-query") ? "active" : ""
@@ -141,6 +210,8 @@ export default function MyApp({ Component, pageProps }: AppProps) {
                 Custom Query
               </a>
             </Link>
+
+            {/* Admin Link */}
             {isAdmin && (
               <Link href="/admin" passHref legacyBehavior>
                 <a className={`nav-link ${isActive("/admin") ? "active" : ""}`}>
@@ -156,13 +227,13 @@ export default function MyApp({ Component, pageProps }: AppProps) {
                   <div
                     ref={userCircleRef}
                     className="user-initials-circle"
-                    onClick={toggleContextMenu}
+                    onClick={toggleUserContextMenu}
                     title={user.email}
                   >
                     {getUserInitials()}
                   </div>
-                  {showContextMenu && (
-                    <div ref={contextMenuRef} className="user-context-menu">
+                  {showUserContextMenu && (
+                    <div ref={userContextMenuRef} className="user-context-menu">
                       <div className="user-email">{user.email}</div>
                       <button
                         onClick={handleLogout}
@@ -178,12 +249,12 @@ export default function MyApp({ Component, pageProps }: AppProps) {
                   <div
                     ref={userCircleRef}
                     className="user-initials-circle"
-                    onClick={toggleContextMenu}
+                    onClick={toggleUserContextMenu}
                   >
                     ?
                   </div>
-                  {showContextMenu && (
-                    <div ref={contextMenuRef} className="user-context-menu">
+                  {showUserContextMenu && (
+                    <div ref={userContextMenuRef} className="user-context-menu">
                       <Link href="/api/auth/login" passHref legacyBehavior>
                         <a className="context-menu-button">Login</a>
                       </Link>

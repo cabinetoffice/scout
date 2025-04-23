@@ -42,6 +42,7 @@ from scout.DataIngest.models.schemas import UserFilter
 from scout.DataIngest.models.schemas import UserUpdate
 from scout.utils.config import Settings
 from scout.utils.storage.postgres_models import project_users
+from scout.utils.storage.postgres_models import File as FileTable
 from scout.utils.storage import postgres_interface as interface
 from scout.utils.storage.postgres_database import SessionLocal
 import os
@@ -199,6 +200,21 @@ def is_item_in_user_projects(
     logger.info(f"Item {item.id} not available to user {user.id}")
     return False
 
+def get_s3_bucket_for_user_project(user: PyUser) -> str:
+    try:
+        project_id = user.projects[0].id
+        # Query the database for the first file associated with the project
+        row = SessionLocal().execute(
+            select(FileTable).where(FileTable.project_id == project_id)
+        ).first()
+
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"No file found for the project: {e}")
+
+    if not row:
+        raise HTTPException(status_code=404, detail="S3 bucket not found for the project")
+
+    return row[0].s3_bucket  # unpack the first column (s3_bucket)
 
 @router.get("/item/{table}")
 def get_items(
@@ -544,8 +560,11 @@ def get_all_files(
         raise HTTPException(status_code=403, detail="Forbidden")
 
     try:
-        response = s3_client.list_objects_v2(Bucket=os.getenv("BUCKET_NAME"))
+        # Get the S3 bucket for the user's project
+        s3_bucket = get_s3_bucket_for_user_project(current_user)
 
+        response = s3_client.list_objects_v2(Bucket=s3_bucket)
+        
         files = []
         for item in response.get("Contents", []):
             files.append({
@@ -567,10 +586,13 @@ async def upload_files(files: List[UploadFile] = File(...),
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Forbidden")
 
+    # Get the S3 bucket for the user's project
+    s3_bucket = get_s3_bucket_for_user_project(current_user)
+    
     uploaded = []
     for file in files:
         try:
-            s3_client.upload_fileobj(file.file, os.getenv("BUCKET_NAME"), file.filename)
+            s3_client.upload_fileobj(file.file, s3_bucket, file.filename)
             uploaded.append(file.filename)
         except (ClientError) as e:
             logging.error(f"Upload failed: {file.filename}, error: {e}")
@@ -590,7 +612,10 @@ def rate_response(
         raise HTTPException(status_code=400, detail="Missing file key")
 
     try:
-        s3_client.delete_object(Bucket=os.getenv("BUCKET_NAME"), Key=key)
+        # Get the S3 bucket for the user's project
+        s3_bucket = get_s3_bucket_for_user_project(current_user)
+        
+        s3_client.delete_object(Bucket=s3_bucket, Key=key)
         return {"deleted": key}
     except (ClientError) as e:
         logging.error(f"Delete failed: {key}, error: {e}")
@@ -605,9 +630,13 @@ def get_signed_url(key: str = Query(...),
         raise HTTPException(status_code=403, detail="Forbidden")
 
     try:
+
+        # Get the S3 bucket for the user's project
+        s3_bucket = get_s3_bucket_for_user_project(current_user)
+        
         url = s3_client.generate_presigned_url(
             "get_object",
-            Params={"Bucket": os.getenv("BUCKET_NAME"), "Key": key},
+            Params={"Bucket": s3_bucket, "Key": key},
             ExpiresIn=timedelta(minutes=5).seconds,
         )
         return {"url": url}

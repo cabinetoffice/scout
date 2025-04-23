@@ -16,7 +16,8 @@ export default async function handler(
 
     if (method !== 'POST') {
         res.setHeader('Allow', ['POST']);
-        return res.status(405).end(`Method ${method} Not Allowed`);
+        res.status(405).end(`Method ${method} Not Allowed`);
+        return;
     }
 
     try {
@@ -40,7 +41,7 @@ export default async function handler(
         const requestInit: RequestInit = {
             method: 'POST',
             headers: backendHeaders,
-            body: req, // Pass the incoming request stream directly
+            body: req as any, // Pass the incoming request stream directly
             // @ts-ignore // Required for Node.js fetch to stream request body
             duplex: 'half',
             credentials: 'include',

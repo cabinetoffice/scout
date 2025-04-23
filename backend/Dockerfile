@@ -24,7 +24,7 @@ RUN poetry config virtualenvs.create false
 
 # Install project dependencies
 ENV POETRY_REQUESTS_TIMEOUT=60
-RUN poetry install --without dev --no-root --no-interaction --no-ansi -vvv
+RUN poetry install --no-cache --without dev --no-root --no-interaction --no-ansi -vvv
 
 # Copy the FastAPI application code
 COPY backend backend

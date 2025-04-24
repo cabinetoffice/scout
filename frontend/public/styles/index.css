@@ -11,3 +11,60 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+
+/* CSS for submenu */
+.header-nav {
+  display: flex;
+  align-items: center; /* Align items vertically */
+}
+
+.nav-item-container {
+  position: relative; /* Needed for absolute positioning of submenu */
+  display: inline-block; /* Or flex, depending on layout */
+}
+
+.submenu {
+  display: flex; /* Or block */
+  flex-direction: column; /* Stack links vertically */
+  position: absolute;
+  top: 100%; /* Position below the main nav item */
+  left: 0;
+  background-color: #333; /* Match header or choose a suitable color */
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 5px 0; /* Add some padding */
+  min-width: 160px; /* Ensure minimum width */
+  z-index: 100; /* Ensure it appears above other content */
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.submenu-link {
+  color: white;
+  padding: 8px 15px;
+  text-decoration: none;
+  display: block; /* Make links take full width */
+  white-space: nowrap; /* Prevent wrapping */
+}
+
+.submenu-link:hover {
+  background-color: #555;
+}
+
+.submenu-link.active {
+  background-color: #007bff;
+  font-weight: bold;
+}
+
+/* Adjust nav-link padding if needed */
+.nav-link {
+  /* Existing styles */
+  padding: 10px 15px; /* Ensure consistent padding */
+  display: inline-flex; /* Helps align text and icon */
+  align-items: center;
+}
+
+/* Style for the dropdown indicator */
+.nav-link svg { /* If using an SVG icon */
+  margin-left: 5px;
+}

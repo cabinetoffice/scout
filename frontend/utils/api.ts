@@ -223,3 +223,40 @@ export const submitQuery = async (query: string): Promise<any> => {
   
     return response.json();
   };
+
+  export const fetchFilesAsAdmin = async () => {
+    try {
+        const response = await fetch('/api/admin/files');
+        if (!response.ok) {
+        if (response.status === 401) {
+            // User is not authenticated
+            return null;
+        }
+        throw new Error('Failed to fetch admin files');
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching admin files:', error);
+        return null;
+    }
+    };
+
+    export const uploadFilesToS3 = async (formData: FormData) => {
+      const res = await fetch("/api/admin/s3_upload", {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+    };
+
+    export const deleteFileFromS3 = async (key: string) => {
+      const res = await fetch(`/api/admin/s3_delete?key=${encodeURIComponent(key)}`);
+      if (!res.ok) throw new Error("Failed to delete file");
+    };
+
+    export const getSignedFileUrl = async (key: string): Promise<string> => {
+      const res = await fetch(`/api/admin/s3_signed_url?key=${encodeURIComponent(key)}`);
+      if (!res.ok) throw new Error("Failed to get signed URL");
+      const data = await res.json();
+      return data.url;
+    };

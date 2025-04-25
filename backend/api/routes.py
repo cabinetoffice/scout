@@ -564,7 +564,6 @@ def get_all_files(
         s3_bucket = get_s3_bucket_for_user_project(current_user)
 
         response = s3_client.list_objects_v2(Bucket=s3_bucket)
-        
         files = []
         for item in response.get("Contents", []):
             files.append({
@@ -630,7 +629,6 @@ def get_signed_url(key: str = Query(...),
         raise HTTPException(status_code=403, detail="Forbidden")
 
     try:
-
         # Get the S3 bucket for the user's project
         s3_bucket = get_s3_bucket_for_user_project(current_user)
         

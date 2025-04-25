@@ -748,3 +748,4 @@ async def get_result_details(
     except Exception as e:
         logger.error(f"Error fetching result details: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+

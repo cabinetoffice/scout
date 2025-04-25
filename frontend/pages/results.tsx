@@ -95,6 +95,7 @@ const ResultsTable: React.FC = () => {
     null
   );
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [thumbsUpColour, setThumbsUpColour] = useState({ color: "none" });
   const [thumbsDownColour, setThumbsDownColour] = useState({ color: "none" });
   const router = useRouter();
@@ -202,24 +203,35 @@ const ResultsTable: React.FC = () => {
             Sources:
           </Typography>
           <div className={styles.sourcesContainer}>
-            {selectedRow.Sources.map((source: Source) => (
-              <Chip
-                key={source.chunk_id}
-                label={source.fileName}
-                onClick={() => handleCitationClick(source.chunk_id)}
-                style={{ cursor: "pointer", marginBottom: "4px" }}
-              />
-            ))}
+            {isLoadingDetails ? (
+              <div style={{ textAlign: "center", padding: "10px" }}>
+                <MagnifyingGlassLoader />
+              </div>
+            ) : (
+              selectedRow.Sources.map((source: Source) => (
+                <Chip
+                  key={source.chunk_id}
+                  label={source.fileName}
+                  onClick={() => handleCitationClick(source.chunk_id)}
+                  style={{ cursor: "pointer", marginBottom: "4px" }}
+                />
+              ))
+            )}
           </div>
         </div>
 
         <div className={styles.modalFooter}>
-          <IconButton onClick={() => handleRating(true)} aria-label="thumbs up">
+          <IconButton
+            onClick={() => handleRating(true)}
+            aria-label="thumbs up"
+            disabled={isLoadingDetails}
+          >
             <ThumbUpIcon style={thumbsUpColour} />
           </IconButton>
           <IconButton
             onClick={() => handleRating(false)}
             aria-label="thumbs down"
+            disabled={isLoadingDetails}
           >
             <ThumbDownIcon style={thumbsDownColour} />
           </IconButton>
@@ -234,15 +246,16 @@ const ResultsTable: React.FC = () => {
     const fetchData = async () => {
       try {
         const data = await fetchItems("result");
-
         const queryAnswer = router.query.answer as string | undefined;
 
         const filteredData = queryAnswer
           ? data.filter((result: Result) => result.answer === queryAnswer)
           : data;
 
+        // Transform data including sources
         const transformedResults: TransformedResult[] = await Promise.all(
           filteredData.map(async (result: Result) => {
+            // Fetch sources for each chunk
             const sources: Source[] = await Promise.all(
               result.chunks.map(async (chunk: any) => {
                 try {
@@ -276,6 +289,7 @@ const ResultsTable: React.FC = () => {
           })
         );
 
+        // Sort results
         transformedResults.sort((a, b) => {
           if (a.Status === "Negative" && b.Status !== "Negative") return -1;
           if (a.Status !== "Negative" && b.Status === "Negative") return 1;
@@ -299,14 +313,29 @@ const ResultsTable: React.FC = () => {
   };
 
   const sourcesFormatter = (params: any) => {
-    return params.value.map((source: Source) => (
-      <Chip
-        key={source.chunk_id}
-        label={source.fileName}
-        onClick={() => handleCitationClick(source.chunk_id)}
-        style={{ margin: "2px", cursor: "pointer" }}
-      />
-    ));
+    if (!params.value || params.value.length === 0) {
+      return <div style={{ color: "#666" }}>No sources</div>;
+    }
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "4px",
+          justifyContent: "center",
+        }}
+      >
+        {params.value.map((source: Source) => (
+          <Chip
+            key={source.chunk_id}
+            label={source.fileName}
+            onClick={() => handleCitationClick(source.chunk_id)}
+            style={{ margin: "2px", cursor: "pointer" }}
+            size="small"
+          />
+        ))}
+      </div>
+    );
   };
 
   const statusRenderer = (params: ICellRendererParams) => {
@@ -372,42 +401,78 @@ const ResultsTable: React.FC = () => {
     setThumbsUpColour({ color: "" });
     setThumbsDownColour({ color: "" });
     setSelectedRow(row.data);
-    const data = await fetchRelatedItems(row.data.id, "result", "rating", true);
-    const ratings: Rating[] = await Promise.all(
-      data.map(async (result: Rating) => {
-        const transformedRating: Rating = {
-          created_datetime: result.created_datetime,
-          project: result.project,
-          updated_datetime: result.updated_datetime,
-          id: result.id,
-          result: result.result,
-          positive_rating: result.positive_rating,
-        };
-        return transformedRating;
-      })
-    );
-    if (ratings.length > 0) {
-      const sorted_ratings = ratings.sort(function (a, b): any {
-        return (
-          (b.updated_datetime
-            ? b.updated_datetime.getTime()
-            : b.created_datetime.getTime()) -
-          (a.updated_datetime
-            ? a.updated_datetime?.getTime()
-            : a.created_datetime.getTime())
-        );
-      });
-      const latest_rating = sorted_ratings[sorted_ratings.length - 1];
-      if (latest_rating.positive_rating) {
-        setThumbsUpColour({ color: "lightgreen" });
-        setThumbsDownColour({ color: "" });
-      } else {
-        setThumbsUpColour({ color: "none" });
-        setThumbsDownColour({ color: "red" });
-      }
-    }
-
+    setIsLoadingDetails(true);
     setOpen(true);
+
+    // Load detailed data in the background
+    const loadDetails = async () => {
+      try {
+        // Load sources
+        const sources: Source[] = await Promise.all(
+          row.data.Chunks.map(async (chunk: any) => {
+            try {
+              const source = await fetchItems("chunk", chunk.id);
+              return {
+                chunk_id: source?.id || "Unknown ID",
+                fileName: source?.file?.name || "Unknown filename",
+              };
+            } catch (error) {
+              return {
+                chunk_id: chunk.id || "Unknown ID",
+                fileName: "Error fetching file name",
+              };
+            }
+          })
+        );
+
+        // Update the selected row with sources
+        setSelectedRow((prev) => (prev ? { ...prev, Sources: sources } : null));
+
+        // Load ratings
+        const ratingsData = await fetchRelatedItems(
+          row.data.id,
+          "result",
+          "rating",
+          true
+        );
+        const ratings: Rating[] = await Promise.all(
+          ratingsData.map(async (result: Rating) => ({
+            created_datetime: result.created_datetime,
+            project: result.project,
+            updated_datetime: result.updated_datetime,
+            id: result.id,
+            result: result.result,
+            positive_rating: result.positive_rating,
+          }))
+        );
+
+        if (ratings.length > 0) {
+          const sorted_ratings = ratings.sort((a, b) => {
+            const bTime = b.updated_datetime
+              ? b.updated_datetime.getTime()
+              : b.created_datetime.getTime();
+            const aTime = a.updated_datetime
+              ? a.updated_datetime.getTime()
+              : a.created_datetime.getTime();
+            return bTime - aTime;
+          });
+
+          const latest_rating = sorted_ratings[sorted_ratings.length - 1];
+          setThumbsUpColour({
+            color: latest_rating.positive_rating ? "lightgreen" : "none",
+          });
+          setThumbsDownColour({
+            color: latest_rating.positive_rating ? "none" : "red",
+          });
+        }
+      } catch (error) {
+        console.error("Error loading details:", error);
+      } finally {
+        setIsLoadingDetails(false);
+      }
+    };
+
+    loadDetails();
   };
 
   const formatEvidence = (evidence: string) => {

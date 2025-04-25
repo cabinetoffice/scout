@@ -641,5 +641,110 @@ def get_signed_url(key: str = Query(...),
     except (ClientError) as e:
         logging.error(f"Signed URL generation failed for {key}: {e}")
         raise HTTPException(status_code=500, detail="Could not generate signed URL")
-    
-    
+
+class PaginatedResponse(BaseModel):
+    items: List[dict]
+    total: int
+    has_more: bool
+
+@router.get("/paginated_results")
+def get_paginated_results(
+    request: Request,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    status_filter: Optional[str] = Query(None),
+    current_user: PyUser = Depends(get_current_user),
+):
+    """Get paginated results with minimal data for table display."""
+    try:
+        # Get base results query
+        results = interface.get_all(PyResult)
+        
+        # Filter results by user's projects
+        results = [r for r in results if is_item_in_user_projects(r, current_user)]
+        
+        # Apply status filter if provided
+        if status_filter:
+            results = [r for r in results if r.answer == status_filter]
+
+        # Calculate pagination
+        total = len(results)
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        
+        # Get slice of results for current page
+        page_results = results[start_idx:end_idx]
+
+        # Transform results to minimal data needed for table
+        transformed_results = []
+        for result in page_results:
+            transformed_results.append({
+                "id": str(result.id),
+                "criterion": {
+                    "question": result.criterion.question,
+                    "category": result.criterion.category,
+                    "gate": result.criterion.gate
+                },
+                "status": result.answer,
+                "source_count": len(result.chunks)
+            })
+
+        return PaginatedResponse(
+            items=transformed_results,
+            total=total,
+            has_more=end_idx < total
+        )
+
+    except Exception as e:
+        logger.error(f"Error fetching paginated results: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/result_details/{result_id}")
+async def get_result_details(
+    result_id: UUID,
+    current_user: PyUser = Depends(get_current_user),
+):
+    """Get detailed result data including sources and ratings."""
+    try:
+        result = interface.get_by_id(PyResult, result_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="Result not found")
+        
+        if not is_item_in_user_projects(result, current_user):
+            raise HTTPException(status_code=403, detail="Not authorized to view this result")
+
+        # Get all sources for the chunks in parallel
+        sources = []
+        for chunk in result.chunks:
+            source = interface.get_by_id(PyChunk, chunk.id)
+            if source and source.file:
+                sources.append({
+                    "chunk_id": str(source.id),
+                    "fileName": source.file.name
+                })
+
+        return {
+            "id": str(result.id),
+            "criterion": {
+                "question": result.criterion.question,
+                "evidence": result.criterion.evidence,
+                "category": result.criterion.category,
+                "gate": result.criterion.gate
+            },
+            "status": result.answer,
+            "justification": result.full_text,
+            "sources": sources,
+            "ratings": [
+                {
+                    "id": str(rating.id),
+                    "positive_rating": rating.positive_rating,
+                    "created_datetime": rating.created_datetime,
+                    "updated_datetime": rating.updated_datetime
+                }
+                for rating in result.ratings
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Error fetching result details: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

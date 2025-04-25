@@ -17,7 +17,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "@mui/icons-material/Error";
 import HelpIcon from "@mui/icons-material/Help";
 
-import { fetchItems, fetchRelatedItems, rateResponse } from "@/utils/api";
+import { rateResponse } from "@/utils/api";
 import MagnifyingGlassLoader from "../components/Loader";
 
 interface Rating {
@@ -85,18 +85,22 @@ interface TransformedResult {
   Justification: string;
   Sources: Source[];
   id: string;
+  sourceCount: number;
 }
 
 const ResultsTable: React.FC = () => {
-  const [allResults, setAllResults] = useState<TransformedResult[]>([]);
   const [results, setResults] = useState<TransformedResult[]>([]);
   const [open, setOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState<TransformedResult | null>(
     null
   );
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [thumbsUpColour, setThumbsUpColour] = useState({ color: "none" });
   const [thumbsDownColour, setThumbsDownColour] = useState({ color: "none" });
+  const [page, setPage] = useState(1);
+  const [totalRows, setTotalRows] = useState(0);
+  const pageSize = 50;
   const router = useRouter();
 
   const handleOpen = () => setOpen(true);
@@ -111,7 +115,6 @@ const ResultsTable: React.FC = () => {
       console.log("Thumbs up response:", response);
       setThumbsUpColour({ color: "green" });
       setThumbsDownColour({ color: "none" });
-      // Optionally, update the UI to reflect the rating change
     } catch (error) {
       console.error("Error giving thumbs up:", error);
     }
@@ -126,7 +129,6 @@ const ResultsTable: React.FC = () => {
       console.log("Thumbs down response:", response);
       setThumbsDownColour({ color: "red" });
       setThumbsUpColour({ color: "none" });
-      // Optionally, update the UI to reflect the rating change
     } catch (error) {
       console.error("Error giving thumbs down:", error);
     }
@@ -202,24 +204,35 @@ const ResultsTable: React.FC = () => {
             Sources:
           </Typography>
           <div className={styles.sourcesContainer}>
-            {selectedRow.Sources.map((source: Source) => (
-              <Chip
-                key={source.chunk_id}
-                label={source.fileName}
-                onClick={() => handleCitationClick(source.chunk_id)}
-                style={{ cursor: "pointer", marginBottom: "4px" }}
-              />
-            ))}
+            {isLoadingDetails ? (
+              <div style={{ textAlign: "center", padding: "10px" }}>
+                <MagnifyingGlassLoader />
+              </div>
+            ) : (
+              selectedRow.Sources.map((source: Source) => (
+                <Chip
+                  key={source.chunk_id}
+                  label={source.fileName}
+                  onClick={() => handleCitationClick(source.chunk_id)}
+                  style={{ cursor: "pointer", marginBottom: "4px" }}
+                />
+              ))
+            )}
           </div>
         </div>
 
         <div className={styles.modalFooter}>
-          <IconButton onClick={() => handleRating(true)} aria-label="thumbs up">
+          <IconButton
+            onClick={() => handleRating(true)}
+            aria-label="thumbs up"
+            disabled={isLoadingDetails}
+          >
             <ThumbUpIcon style={thumbsUpColour} />
           </IconButton>
           <IconButton
             onClick={() => handleRating(false)}
             aria-label="thumbs down"
+            disabled={isLoadingDetails}
           >
             <ThumbDownIcon style={thumbsDownColour} />
           </IconButton>
@@ -233,57 +246,33 @@ const ResultsTable: React.FC = () => {
 
     const fetchData = async () => {
       try {
-        const data = await fetchItems("result");
-
         const queryAnswer = router.query.answer as string | undefined;
-
-        const filteredData = queryAnswer
-          ? data.filter((result: Result) => result.answer === queryAnswer)
-          : data;
-
-        const transformedResults: TransformedResult[] = await Promise.all(
-          filteredData.map(async (result: Result) => {
-            const sources: Source[] = await Promise.all(
-              result.chunks.map(async (chunk: any) => {
-                try {
-                  const source = await fetchItems("chunk", chunk.id);
-                  return {
-                    chunk_id: source?.id || "Unknown ID",
-                    fileName: source?.file?.name || "Unknown filename",
-                  };
-                } catch (error) {
-                  return {
-                    chunk_id: chunk.id || "Unknown ID",
-                    fileName: "Error fetching file name",
-                  };
-                }
-              })
-            );
-
-            return {
-              Criterion: result.criterion,
-              Evidence: result.criterion.evidence,
-              Category: result.criterion.category,
-              Gate: result.criterion.gate,
-              Status: result.answer,
-              Justification: result.full_text,
-              Sources: sources,
-              id: result.id,
-              Chunks: result.chunks,
-              Project: result.project,
-              Ratings: result.ratings,
-            };
-          })
+        const response = await fetch(
+          `/api/paginated_results?page=${page}&page_size=${pageSize}${
+            queryAnswer ? `&status_filter=${queryAnswer}` : ""
+          }`
         );
 
-        transformedResults.sort((a, b) => {
-          if (a.Status === "Negative" && b.Status !== "Negative") return -1;
-          if (a.Status !== "Negative" && b.Status === "Negative") return 1;
-          return 0;
-        });
+        if (!response.ok) {
+          throw new Error("Failed to fetch results");
+        }
 
-        setAllResults(transformedResults);
+        const data = await response.json();
+        const transformedResults = data.items.map((result: any) => ({
+          Criterion: result.criterion,
+          Evidence: "", // Will be loaded on demand
+          Category: result.criterion.category,
+          Gate: result.criterion.gate,
+          Status: result.status,
+          Justification: "", // Will be loaded on demand
+          Sources: [], // Will be loaded on demand
+          id: result.id,
+          Chunks: [], // Will be loaded on demand
+          sourceCount: result.source_count,
+        }));
+
         setResults(transformedResults);
+        setTotalRows(data.total);
       } catch (error) {
         console.error("Error fetching data:", error);
       } finally {
@@ -292,122 +281,57 @@ const ResultsTable: React.FC = () => {
     };
 
     fetchData();
-  }, [router.isReady, router.query]);
+  }, [router.isReady, router.query, page]);
 
-  const handleCitationClick = (chunk_id: string) => {
-    router.push({ pathname: "/file-viewer", query: { citation: chunk_id } });
-  };
-
-  const sourcesFormatter = (params: any) => {
-    return params.value.map((source: Source) => (
-      <Chip
-        key={source.chunk_id}
-        label={source.fileName}
-        onClick={() => handleCitationClick(source.chunk_id)}
-        style={{ margin: "2px", cursor: "pointer" }}
-      />
-    ));
-  };
-
-  const statusRenderer = (params: ICellRendererParams) => {
-    switch (params.value) {
-      case "Positive":
-        return <CheckCircleIcon style={{ color: "green" }} />;
-      case "Neutral":
-        return <HelpIcon style={{ color: "orange" }} />;
-      case "Negative":
-        return <ErrorIcon style={{ color: "red" }} />;
-      default:
-        return params.value;
+  const loadResultDetails = async (resultId: string) => {
+    try {
+      const response = await fetch(`/api/result_details/${resultId}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch result details");
+      }
+      const details = await response.json();
+      return {
+        ...details,
+        Sources: details.sources,
+        Criterion: details.criterion,
+        Status: details.status,
+        Justification: details.justification,
+        Ratings: details.ratings,
+      };
+    } catch (error) {
+      console.error("Error loading result details:", error);
+      return null;
     }
   };
-
-  const criterionRenderer = (params: ICellRendererParams) => {
-    return params.value.question;
-  };
-
-  const columnDefs: ColDef[] = [
-    {
-      headerName: "Criterion",
-      field: "Criterion",
-      wrapText: true,
-      autoHeight: true,
-      flex: 5,
-      cellRenderer: criterionRenderer,
-      cellStyle: { textAlign: "left" },
-      headerClass: "center-header",
-    },
-    {
-      headerName: "Category",
-      field: "Category",
-      wrapText: true,
-      autoHeight: true,
-      flex: 1,
-      cellStyle: { textAlign: "center" },
-      headerClass: "center-header",
-    },
-    {
-      headerName: "Status",
-      field: "Status",
-      wrapText: true,
-      autoHeight: true,
-      flex: 1,
-      cellRenderer: statusRenderer,
-      cellStyle: { textAlign: "center" },
-      headerClass: "center-header",
-    },
-    {
-      headerName: "Sources",
-      field: "Sources",
-      wrapText: true,
-      autoHeight: true,
-      flex: 3,
-      cellRenderer: sourcesFormatter,
-      cellStyle: { textAlign: "center" },
-      headerClass: "center-header",
-    },
-  ];
 
   const onRowClicked = async (row: any) => {
     setThumbsUpColour({ color: "" });
     setThumbsDownColour({ color: "" });
     setSelectedRow(row.data);
-    const data = await fetchRelatedItems(row.data.id, "result", "rating", true);
-    const ratings: Rating[] = await Promise.all(
-      data.map(async (result: Rating) => {
-        const transformedRating: Rating = {
-          created_datetime: result.created_datetime,
-          project: result.project,
-          updated_datetime: result.updated_datetime,
-          id: result.id,
-          result: result.result,
-          positive_rating: result.positive_rating,
-        };
-        return transformedRating;
-      })
-    );
-    if (ratings.length > 0) {
-      const sorted_ratings = ratings.sort(function (a, b): any {
-        return (
-          (b.updated_datetime
-            ? b.updated_datetime.getTime()
-            : b.created_datetime.getTime()) -
-          (a.updated_datetime
-            ? a.updated_datetime?.getTime()
-            : a.created_datetime.getTime())
-        );
-      });
-      const latest_rating = sorted_ratings[sorted_ratings.length - 1];
-      if (latest_rating.positive_rating) {
-        setThumbsUpColour({ color: "lightgreen" });
-        setThumbsDownColour({ color: "" });
-      } else {
-        setThumbsUpColour({ color: "none" });
-        setThumbsDownColour({ color: "red" });
+    setIsLoadingDetails(true);
+    setOpen(true);
+
+    const details = await loadResultDetails(row.data.id);
+    if (details) {
+      setSelectedRow((prev) => ({
+        ...prev!,
+        Evidence: details.Criterion.evidence,
+        Justification: details.Justification,
+        Sources: details.Sources,
+        Ratings: details.Ratings,
+      }));
+
+      if (details.Ratings && details.Ratings.length > 0) {
+        const latestRating = details.Ratings[details.Ratings.length - 1];
+        setThumbsUpColour({
+          color: latestRating.positive_rating ? "lightgreen" : "none",
+        });
+        setThumbsDownColour({
+          color: latestRating.positive_rating ? "none" : "red",
+        });
       }
     }
-
-    setOpen(true);
+    setIsLoadingDetails(false);
   };
 
   const formatEvidence = (evidence: string) => {
@@ -443,6 +367,65 @@ const ResultsTable: React.FC = () => {
     }
   };
 
+  const handleCitationClick = (chunk_id: string) => {
+    router.push({ pathname: "/file-viewer", query: { citation: chunk_id } });
+  };
+
+  const columnDefs: ColDef[] = [
+    {
+      headerName: "Criterion",
+      field: "Criterion",
+      wrapText: true,
+      autoHeight: true,
+      flex: 5,
+      cellRenderer: (params: ICellRendererParams) => params.value.question,
+      cellStyle: { textAlign: "left" },
+      headerClass: "center-header",
+    },
+    {
+      headerName: "Category",
+      field: "Category",
+      wrapText: true,
+      autoHeight: true,
+      flex: 1,
+      cellStyle: { textAlign: "center" },
+      headerClass: "center-header",
+    },
+    {
+      headerName: "Status",
+      field: "Status",
+      wrapText: true,
+      autoHeight: true,
+      flex: 1,
+      cellRenderer: (params: ICellRendererParams) => {
+        switch (params.value) {
+          case "Positive":
+            return <CheckCircleIcon style={{ color: "green" }} />;
+          case "Neutral":
+            return <HelpIcon style={{ color: "orange" }} />;
+          case "Negative":
+            return <ErrorIcon style={{ color: "red" }} />;
+          default:
+            return params.value;
+        }
+      },
+      cellStyle: { textAlign: "center" },
+      headerClass: "center-header",
+    },
+    {
+      headerName: "Sources",
+      field: "sourceCount",
+      wrapText: true,
+      autoHeight: true,
+      flex: 1,
+      cellRenderer: (params: any) => {
+        return `${params.value} sources`;
+      },
+      cellStyle: { textAlign: "center" },
+      headerClass: "center-header",
+    },
+  ];
+
   return (
     <div className={styles.tableContainer}>
       {isLoading ? (
@@ -457,9 +440,12 @@ const ResultsTable: React.FC = () => {
               autoHeight: true,
               filter: true,
             }}
-            onRowClicked={(e) => {
-              setSelectedRow(e.data);
-              handleOpen();
+            onRowClicked={onRowClicked}
+            pagination={true}
+            paginationPageSize={pageSize}
+            onPaginationChanged={(params) => {
+              const currentPage = params.api.paginationGetCurrentPage();
+              setPage(currentPage + 1);
             }}
           />
         </div>

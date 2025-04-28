@@ -1,9 +1,18 @@
 "use client";
-
 import React, { useEffect, useState } from "react";
-import { AgGridReact } from "ag-grid-react";
+import dynamic from "next/dynamic";
+
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
+
+const AgGridReact = dynamic(
+  () => import("ag-grid-react").then((mod) => mod.AgGridReact),
+  { ssr: false }
+);
+
+const MagnifyingGlassLoader = dynamic(() => import("../components/Loader"), {
+  ssr: false,
+});
 import {
   TextField,
   Select,
@@ -17,10 +26,14 @@ import {
 import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
-import MagnifyingGlassLoader from "../components/Loader";
 import styles from "../public/styles/AuditLogs.module.css";
 import { useRouter } from "next/router";
-
+import {
+  ColDef,
+  ICellRendererParams,
+  ValueFormatterParams,
+  RowHeightParams,
+} from "ag-grid-community";
 interface AuditLog {
   id: string;
   timestamp: string;
@@ -42,13 +55,13 @@ const AuditLogsPage: React.FC = () => {
   const [totalRows, setTotalRows] = useState(0);
   const pageSize = 50;
 
-  const columnDefs = [
+  const columnDefs: ColDef[] = [
     {
       headerName: "Timestamp",
       field: "timestamp",
       sort: "desc",
       flex: 1,
-      valueFormatter: (params: any) => {
+      valueFormatter: (params) => {
         return new Date(params.value).toLocaleString();
       },
     },
@@ -71,7 +84,7 @@ const AuditLogsPage: React.FC = () => {
       headerName: "Details",
       field: "details",
       flex: 2,
-      cellRenderer: (params: any) => {
+      cellRenderer: (params: ICellRendererParams<AuditLog, any>) => {
         if (!params.value) return "";
         try {
           return (
@@ -215,10 +228,10 @@ const AuditLogsPage: React.FC = () => {
               }}
               rowHeight={100}
               getRowHeight={(params) => {
-                // Dynamically set row height based on content
-                const detailsHeight = params.data.details
-                  ? JSON.stringify(params.data.details, null, 2).split("\n")
-                      .length * 20
+                const data = params.data as AuditLog;
+                const detailsHeight = data?.details
+                  ? JSON.stringify(data.details, null, 2).split("\n").length *
+                    20
                   : 0;
                 return Math.max(100, detailsHeight);
               }}
@@ -231,3 +244,6 @@ const AuditLogsPage: React.FC = () => {
 };
 
 export default AuditLogsPage;
+export async function getServerSideProps() {
+  return { props: {} };
+}

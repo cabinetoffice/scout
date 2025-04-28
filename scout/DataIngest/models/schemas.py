@@ -341,3 +341,27 @@ class FileInfo(BaseModel):
         None,
         description="The date when the file was published or last updated in DD-MM-YYYY format",
     )
+
+
+class AuditLogBase(BaseModel):
+    model_config = global_model_config
+
+    id: UUID
+    timestamp: datetime
+    user_id: UUID
+    action_type: str
+    details: Optional[dict] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+
+
+class AuditLogCreate(BaseModel):
+    user_id: UUID
+    action_type: str
+    details: Optional[dict] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+
+
+class AuditLog(AuditLogBase):
+    user: Optional[UserBase] = None

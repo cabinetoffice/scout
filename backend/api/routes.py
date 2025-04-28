@@ -17,29 +17,33 @@ from fastapi import HTTPException
 from fastapi import Query
 from fastapi import Request
 from fastapi.responses import Response
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from backend.utils.associate_user_project_request import AssociateUserToProjectRequest
 from backend.utils.filters import Filters
 from backend.utils.rating_request import RatingRequest
-from scout.DataIngest.models.schemas import Chunk as PyChunk
-from scout.DataIngest.models.schemas import ChunkFilter
-from scout.DataIngest.models.schemas import Criterion as PyCriterion
-from scout.DataIngest.models.schemas import CriterionFilter
-from scout.DataIngest.models.schemas import File as PyFile
-from scout.DataIngest.models.schemas import FileFilter
-from scout.DataIngest.models.schemas import Project as PyProject
-from scout.DataIngest.models.schemas import ProjectFilter
-from scout.DataIngest.models.schemas import Rating as PyRating
-from scout.DataIngest.models.schemas import RatingCreate
-from scout.DataIngest.models.schemas import RatingFilter
-from scout.DataIngest.models.schemas import RatingUpdate
-from scout.DataIngest.models.schemas import Result as PyResult
-from scout.DataIngest.models.schemas import ResultFilter
-from scout.DataIngest.models.schemas import User as PyUser
-from scout.DataIngest.models.schemas import UserCreate
-from scout.DataIngest.models.schemas import UserFilter
-from scout.DataIngest.models.schemas import UserUpdate
+from scout.DataIngest.models.schemas import (
+    Chunk as PyChunk,
+    ChunkFilter,
+    Criterion as PyCriterion,
+    CriterionFilter,
+    File as PyFile,
+    FileFilter,
+    Project as PyProject,
+    ProjectFilter,
+    Rating as PyRating,
+    RatingCreate,
+    RatingFilter,
+    RatingUpdate,
+    Result as PyResult,
+    ResultFilter,
+    User as PyUser,
+    UserCreate,
+    UserFilter,
+    UserUpdate,
+    AuditLog,
+)
 from scout.utils.config import Settings
 from scout.utils.storage.postgres_models import project_users
 from scout.utils.storage.postgres_models import File as FileTable
@@ -48,10 +52,10 @@ from scout.utils.storage.postgres_database import SessionLocal
 import os
 import boto3
 from botocore.exceptions import ClientError
+from starlette.concurrency import run_in_threadpool
 
-import os
-import boto3
-from botocore.exceptions import ClientError
+import asyncio
+from backend.utils.audit import log_llm_query, log_file_operation
 
 router = APIRouter()
 
@@ -75,6 +79,7 @@ models = {
     "project": PyProject,
     "user": PyUser,
     "rating": PyRating,
+    "audit_log": AuditLog,
 }
 
 
@@ -464,9 +469,10 @@ def get_all_projects(
         raise HTTPException(status_code=500, detail=f"Error fetching all projects: {e}")
 
 @router.post("/custom-query")
-def custom_query(
+async def custom_query(
     query: str,
     current_user: PyUser = Depends(get_current_user),
+    request: Request = None,
 ):
     model_id = os.getenv("AWS_BEDROCK_MODEL_ID")
 
@@ -490,17 +496,29 @@ def custom_query(
     logger.info(f"bedrock query payload: {payload}")
     
     try:
-        response = client.invoke(
-            FunctionName='bd_base_query145',
-            InvocationType='RequestResponse',
-            Payload=json.dumps(payload)
+        # Run the blocking Lambda invocation in a thread pool
+        response = await run_in_threadpool(
+            lambda: client.invoke(
+                FunctionName='bd_base_query145',
+                InvocationType='RequestResponse',
+                Payload=json.dumps(payload)
+            )
         )
         response_payload = json.loads(response['Payload'].read())
+        
+        # Log the LLM query
+        if request:
+            asyncio.create_task(log_llm_query(
+                request=request,
+                user_id=current_user.id,
+                query=query,
+                response=response_payload
+            ))
+        
         return response_payload
     except ClientError as e:
         logger.error(f"An error occurred while invoking the Lambda function: {e}")
         raise HTTPException(status_code=500, detail="An error occurred while invoking the Lambda function")
-
 class CreateUserRequest(BaseModel):
     action: str
     emails: List[str]
@@ -578,10 +596,12 @@ def get_all_files(
         raise HTTPException(status_code=500, detail=f"Error listing files: {str(e)}")
 
 @router.post("/admin/upload")
-async def upload_files(files: List[UploadFile] = File(...),
+async def upload_files(
+    files: List[UploadFile] = File(...),
     current_user: PyUser = Depends(get_current_user),
-    s3_client: boto3.client = Depends(get_s3_client),):
-
+    s3_client: boto3.client = Depends(get_s3_client),
+    request: Request = None
+):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Forbidden")
 
@@ -591,19 +611,42 @@ async def upload_files(files: List[UploadFile] = File(...),
     uploaded = []
     for file in files:
         try:
-            s3_client.upload_fileobj(file.file, s3_bucket, file.filename)
+            # Get file size before uploading to S3
+            file.file.seek(0, 2)  # Seek to the end of the file
+            file_size = file.file.tell()  # Get current position (file size)
+            file.file.seek(0)  # Reset file position to beginning for upload
+            
+            # S3 operations are blocking, run them in a thread pool
+            await run_in_threadpool(
+                lambda: s3_client.upload_fileobj(file.file, s3_bucket, file.filename)
+            )
             uploaded.append(file.filename)
+            
+            # Log the file upload using the previously captured size
+            if request:
+                asyncio.create_task(log_file_operation(
+                    request=request,
+                    user_id=current_user.id,
+                    operation="upload",
+                    file_details={
+                        "filename": file.filename,
+                        "bucket": s3_bucket,
+                        "size": file_size
+                    }
+                ))
+                
         except (ClientError) as e:
             logging.error(f"Upload failed: {file.filename}, error: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to upload {file.filename}")
     return {"uploaded": uploaded}
 
 @router.get("/admin/delete")
-def rate_response(
+async def delete_file(
     key: str,
     current_user: PyUser = Depends(get_current_user),
-    s3_client: boto3.client = Depends(get_s3_client),):
-
+    s3_client: boto3.client = Depends(get_s3_client),
+    request: Request = None
+):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Forbidden")
 
@@ -614,12 +657,40 @@ def rate_response(
         # Get the S3 bucket for the user's project
         s3_bucket = get_s3_bucket_for_user_project(current_user)
         
-        s3_client.delete_object(Bucket=s3_bucket, Key=key)
+        # Get file metadata before deletion
+        try:
+            file_metadata = s3_client.head_object(Bucket=s3_bucket, Key=key)
+            # Convert datetime objects in metadata to ISO format strings
+            serializable_metadata = {
+                'ContentLength': file_metadata.get('ContentLength'),
+                'ContentType': file_metadata.get('ContentType'),
+                'LastModified': file_metadata.get('LastModified').isoformat() if file_metadata.get('LastModified') else None,
+                'ETag': file_metadata.get('ETag'),
+            }
+        except ClientError:
+            serializable_metadata = {}
+        
+        # S3 operations might be blocking, consider running in thread pool
+        await run_in_threadpool(lambda: s3_client.delete_object(Bucket=s3_bucket, Key=key))
+        
+        # Log the file deletion
+        if request:
+            asyncio.create_task(log_file_operation(
+                request=request,
+                user_id=current_user.id,
+                operation="delete",
+                file_details={
+                    "filename": key,
+                    "bucket": s3_bucket,
+                    "metadata": serializable_metadata
+                }
+            ))
+            
         return {"deleted": key}
     except (ClientError) as e:
         logging.error(f"Delete failed: {key}, error: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete file")
-    
+
 @router.get("/admin/signed_url")
 def get_signed_url(key: str = Query(...),
     current_user: PyUser = Depends(get_current_user),
@@ -749,3 +820,54 @@ async def get_result_details(
         logger.error(f"Error fetching result details: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/admin/audit-logs")
+def get_audit_logs(
+    request: Request,
+    current_user: PyUser = Depends(get_current_user),
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
+    action_type: Optional[str] = Query(None),
+    user_id: Optional[UUID] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+):
+    """Get paginated audit logs with optional filtering."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    try:
+        # Base query
+        audit_logs = interface.get_all(models.get("audit_log"))
+        
+        # Apply filters
+        if start_date:
+            audit_logs = [log for log in audit_logs if log.timestamp >= start_date]
+        if end_date:
+            audit_logs = [log for log in audit_logs if log.timestamp <= end_date]
+        if action_type:
+            audit_logs = [log for log in audit_logs if log.action_type == action_type]
+        if user_id:
+            audit_logs = [log for log in audit_logs if log.user_id == user_id]
+
+        # Sort by timestamp descending
+        audit_logs.sort(key=lambda x: x.timestamp, reverse=True)
+
+        # Calculate pagination
+        total = len(audit_logs)
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        
+        # Get slice of logs for current page
+        page_logs = audit_logs[start_idx:end_idx]
+
+        return {
+            "items": [log.dict() for log in page_logs],
+            "total": total,
+            "has_more": end_idx < total,
+            "page": page,
+            "page_size": page_size
+        }
+
+    except Exception as e:
+        logger.error(f"Error fetching audit logs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

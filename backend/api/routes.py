@@ -871,4 +871,3 @@ def get_audit_logs(
     except Exception as e:
         logger.error(f"Error fetching audit logs: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-

@@ -1,6 +1,7 @@
 from datetime import datetime
 import logging
 from uuid import UUID
+from typing import Generator
 
 from decorator import contextmanager
 from sqlalchemy import or_
@@ -9,7 +10,7 @@ from sqlalchemy import select, insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from scout.DataIngest.models.schemas import Chunk as PyChunk
+from scout.DataIngest.models.schemas import AuditLogCreate, Chunk as PyChunk
 from scout.DataIngest.models.schemas import ChunkCreate
 from scout.DataIngest.models.schemas import ChunkFilter
 from scout.DataIngest.models.schemas import ChunkUpdate
@@ -38,6 +39,7 @@ from scout.DataIngest.models.schemas import UserBase
 from scout.DataIngest.models.schemas import UserCreate
 from scout.DataIngest.models.schemas import UserFilter
 from scout.DataIngest.models.schemas import UserUpdate
+from scout.DataIngest.models.schemas import AuditLog as PyAuditLog
 from scout.utils.storage.filesystem import S3StorageHandler
 from scout.utils.storage.postgres_database import SessionLocal
 from scout.utils.storage.postgres_models import Chunk as SqChunk
@@ -51,6 +53,7 @@ from scout.utils.storage.postgres_models import Rating as SqRating
 from scout.utils.storage.postgres_models import Result as SqResult
 from scout.utils.storage.postgres_models import result_chunks
 from scout.utils.storage.postgres_models import User as SqUser
+from scout.utils.storage.postgres_models import AuditLog as SqAuditLog
 # Pydantic models
 # SqlAlchemy models
 
@@ -79,6 +82,7 @@ pydantic_model_to_sqlalchemy_model_map = {
     PyRating: SqRating,
     RatingCreate: SqRating,
     RatingUpdate: SqRating,
+    PyAuditLog: SqAuditLog,
 }
 
 pydantic_update_model_to_base_model = {
@@ -116,7 +120,7 @@ logger = logging.getLogger(__name__)
 
 
 @contextmanager
-def SessionManager() -> Session:
+def SessionManager() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
         yield db
@@ -130,8 +134,8 @@ def SessionManager() -> Session:
 
 
 def get_all(
-    model: PyCriterion | PyChunk | PyFile | PyProject | PyResult | PyUser | PyRating,
-) -> list[PyCriterion | PyChunk | PyFile | PyProject | PyResult | PyUser | PyRating] | None:
+    model: PyCriterion | PyChunk | PyFile | PyProject | PyResult | PyUser | PyRating | PyAuditLog,
+) -> list[PyCriterion | PyChunk | PyFile | PyProject | PyResult | PyUser | PyRating | PyAuditLog] | None:
     with SessionManager() as db:
         try:
             sq_model = pydantic_model_to_sqlalchemy_model_map.get(model)
@@ -185,6 +189,8 @@ def get_or_create_item(
                 return _get_or_create_file(model, db)
             if model_type is RatingCreate:
                 return _get_or_create_rating(model, db)
+            if model_type is AuditLogCreate:
+                return _get_or_create_auditlog(model, db)
         except Exception as _:
             logger.exception(f"Failed to get or create item, {model}")
 
@@ -430,6 +436,54 @@ def _get_or_create_result(
     return PyResult.model_validate(item_to_add)
 
 
+def _get_or_create_auditlog(model: AuditLogCreate, db: Session):
+    """Create a new audit log entry. Audit logs are always created, never retrieved."""
+    from scout.utils.storage.postgres_models import AuditLog as SqAuditLog
+    
+    # Convert datetime objects in details to ISO format strings
+    if model.details:
+        details = {}
+        for key, value in model.details.items():
+            if isinstance(value, datetime):
+                details[key] = value.isoformat()
+            else:
+                details[key] = value
+    else:
+        details = None
+    
+    item_to_add = SqAuditLog(
+        user_id=model.user_id,
+        action_type=model.action_type,
+        details=details,
+        ip_address=model.ip_address,
+        user_agent=model.user_agent
+    )
+    
+    try:
+        db.add(item_to_add)
+        db.commit()
+        db.flush()  # Refresh created item to add ID to it
+        
+        from scout.DataIngest.models.schemas import AuditLog
+        return AuditLog.model_validate(item_to_add)
+    except Exception as e:
+        logger.error(f"Failed to create audit log: {e}")
+        db.rollback()
+        raise
+
+
+def get_all_audit_logs() -> list[PyAuditLog]:
+    """Retrieve all rows from the audit log table."""
+    with SessionManager() as db:
+        try:
+            sq_model = SqAuditLog
+            result = db.query(sq_model).all()
+            return [PyAuditLog.model_validate(item) for item in result]
+        except Exception as e:
+            logger.exception("Failed to retrieve audit logs")
+            raise
+
+
 def delete_item(
     model: PyCriterion | PyChunk | PyFile | PyProject | PyResult | PyUser | PyRating,
 ) -> UUID:
@@ -610,11 +664,24 @@ def apply_updates(item, update_data: dict, db: Session, relation_fields: dict = 
     for field, value in update_data.items():
         if field in relation_fields:
             related_model = relation_fields[field]
-            related_items = [
-                db.query(related_model).get(obj["id"] if isinstance(obj, dict) else obj.id)
-                for obj in value
-            ]
-            setattr(item, field, related_items)
+            existing_related = getattr(item, field)
+
+            # Convert list of dicts or objects into a set of related items from DB
+            incoming_ids = set()
+            related_items_to_add = []
+
+            for obj in value:
+                obj_id = obj["id"] if isinstance(obj, dict) else getattr(obj, "id", None)
+                if obj_id is not None:
+                    incoming_ids.add(obj_id)
+                    db_item = db.query(related_model).get(obj_id)
+                    if db_item and db_item not in existing_related:
+                        related_items_to_add.append(db_item)
+
+            # Only add new items, do not remove existing ones
+            for db_item in related_items_to_add:
+                existing_related.append(db_item)
+
         else:
             setattr(item, field, value)
 
@@ -630,7 +697,8 @@ def _update_result(model: ResultUpdate, db: Session) -> PyResult | None:
         return None
     item.answer = model.answer
     item.full_text = model.full_text
-    item.project_id = model.project.id if model.project else None
+    if model.project is not None:
+        item.project_id = model.project.id
     item.criterion_id = model.criterion.id if model.criterion else None
 
     db.commit()

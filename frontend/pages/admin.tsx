@@ -4,6 +4,8 @@ import { AgGridReact } from "ag-grid-react";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
 import { ColDef, ICellRendererParams } from "ag-grid-community";
+import AssessmentIcon from "@mui/icons-material/Assessment";
+import { useRouter } from "next/router";
 
 import {
   addUserToProject,
@@ -29,8 +31,8 @@ interface User {
   projects?: Project[];
 }
 
-// export default function AdminPage({ adminUsers }: { adminUsers: User[] }) {
 export default function AdminPage() {
+  const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -61,7 +63,6 @@ export default function AdminPage() {
   useEffect(() => {
     const fetchAllProjects = async () => {
       try {
-        // const projects = await fetchItems("project");
         const projects = await fetchProjectsAsAdmin();
         console.log("All projects:", projects);
         setAllProjects(projects);
@@ -78,7 +79,6 @@ export default function AdminPage() {
       return;
     }
     if (editingIndex === null) {
-      // Handle adding a new user
       try {
         const newUser = await createUser({
           action: "create",
@@ -88,16 +88,13 @@ export default function AdminPage() {
         fetchUsers();
       } catch (error) {
         console.error("Error creating new user:", error);
-        // Handle error appropriately (e.g., show a notification to the user)
       }
     } else {
-      // Handle editing an existing user
       const updatedUser = { ...formUser };
       const updated = [...users];
       updated[editingIndex] = updatedUser;
       setUsers(updated);
 
-      // Update projects for the user
       const user = users[editingIndex];
       const userProjects = user.projects || [];
       const formProjects = formUser.projects || [];
@@ -121,7 +118,6 @@ export default function AdminPage() {
             `Error removing user ${user.id} from project ${project.id}:`,
             error
           );
-          // Handle error appropriately (e.g., show a notification to the user)
         }
       }
 
@@ -137,7 +133,6 @@ export default function AdminPage() {
             `Error adding user ${user.id} to project ${project.id}:`,
             error
           );
-          // Handle error appropriately (e.g., show a notification to the user)
         }
       }
     }
@@ -278,35 +273,52 @@ export default function AdminPage() {
     });
   };
 
+  const menuItems = [
+    {
+      text: "Audit Logs",
+      icon: <AssessmentIcon />,
+      onClick: () => router.push("/audit-logs"),
+    },
+  ];
+
   return (
     <div style={{ width: "100%", height: "100vh" }}>
-      <h2
+      <div
         style={{
-          fontSize: "1.5rem",
-          fontWeight: "bold",
-          marginTop: "2px",
-          marginLeft: "20px",
-          marginBottom: "20px",
-          textAlign: "left",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "20px",
         }}
       >
-        <button
-          onClick={() => {
-            setEditingIndex(null);
-            setFormUser({ id: "", email: "", role: "", projects: [] });
-            setShowForm(true);
-          }}
-          style={addButtonStyles}
-        >
-          Add New User
-        </button>
-      </h2>
+        <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", margin: 0 }}>
+          User Management
+        </h2>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button
+            onClick={() => {
+              setEditingIndex(null);
+              setFormUser({ id: "", email: "", role: "", projects: [] });
+              setShowForm(true);
+            }}
+            style={addButtonStyles}
+          >
+            Add New User
+          </button>
+          <button
+            onClick={() => router.push("/audit-logs")}
+            style={{ ...addButtonStyles, backgroundColor: "#2196F3" }}
+          >
+            View Audit Logs
+          </button>
+        </div>
+      </div>
       {users.length === 0 ? (
         <p style={{ color: "gray", textAlign: "center" }}>No users found.</p>
       ) : (
         <div
           className="ag-theme-alpine"
-          style={{ height: "calc(100% - 160px)", width: "100%", margin: "0" }} // Removed padding from table container
+          style={{ height: "calc(100% - 160px)", width: "100%", margin: "0" }}
         >
           <AgGridReact
             rowData={users}

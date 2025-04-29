@@ -25,13 +25,14 @@ async def create_audit_log(
     
     interface.get_or_create_item(audit_log)
 
-async def log_llm_query(request: Request, user_id: UUID, query: str, response: dict):
+async def log_llm_query(request: Request, user_id: UUID, project_name: str, query: str, response: dict):
     """Log an LLM query."""
     await create_audit_log(
         request,
         user_id,
         "llm_query",
         {
+            "project_name": project_name,
             "query": query,
             "response": response,
             "timestamp": datetime.utcnow().isoformat()

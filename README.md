@@ -1,8 +1,8 @@
-#  🔍 IPA scout
+# 🔍 NISTA scout
 
 > ⚠️ Incubation Project: This project is an incubation project; as such, we encourage teams to evaluate its performance before applying it to their assurance process.
-> 
-Scout automatically analyses new project documents with respect to IPA guidance and gate workbooks, flagging potential problems as soon as possible. This tool improves and expedites the work of assurance review teams.
+>
+> Scout automatically analyses new project documents with respect to NISTA guidance and gate workbooks, flagging potential problems as soon as possible. This tool improves and expedites the work of assurance review teams.
 
 There is a pipeline that ingests project documents, criteria, then uses an LLM to evaluate projects against the criteria. The project data, criteria and evaluation results are saved in a database. There is then an app that allows users to explore this data and identify potential issues with projects.
 
@@ -10,59 +10,69 @@ At present this code only runs locally.
 
 For more detailed documentation, see the `docs` folder. There are also example scripts in `scripts`.
 
-
 # Installing the project locally
 
 Note that you will need Docker and Python installed on your laptop.
 
 Clone the repo.
+
 ```
 git clone git@github.com:i-dot-ai/scout.git
 cd scout
 ```
+
 Make sure you have [poetry installed](https://python-poetry.org/docs/) for dependency management.
 
-Install dependencies and copy .env file: 
+Install dependencies and copy .env file:
+
 ```
 make setup
 ```
+
 This make command assumes you are using a Mac with Homebrew.
 
 Run using:
+
 ```
 docker compose build
 docker compose up
 ```
 
 You will also need to run migrations (more detail on database below):
+
 ```
 poetry run alembic upgrade head
 ```
-or 
+
+or
+
 ```
 make alembic-upgrade
 ```
+
 (depends how you set-up alembic).
 
-In your browser see the app at: 
+In your browser see the app at:
+
 ```
 http://localhost:3000
 ```
 
-There won't be any data in the app yet - you will have to run the pipeline to analyse project data and populate the database. 
+There won't be any data in the app yet - you will have to run the pipeline to analyse project data and populate the database.
 
 You can manually reset your database using `make reset-local-db` (when you have your database running). For this to work, you will need postgres installed locally (with a Mac: `brew install postgres` or `brew install postgres@13` or whichever version you want).
-
 
 # Running the analysis pipeline
 
 The pipeline to evaluate projects runs outside the app.
 
-Make a `.data` directory in the root of the project: 
+Make a `.data` directory in the root of the project:
+
 ```
 mkdir .data
 cd .data
 ```
+
 Don't commit this to git, it is in the `.gitignore`.
 
 This is where you will create folders with your project documents, and folders for your criteria.
@@ -81,7 +91,6 @@ You may wish to use the example data in the `example_data` folder - this contain
 
 More detailed documentation can be found in `docs/analyse_projects.md`.
 
-
 # Database
 
 Scout uses a persistent data store using PostgreSQL, running in a Docker container locally (called `db`).
@@ -98,23 +107,24 @@ When adding new models, import each model into `alembic/env.py` so that alembic 
 
 Run `make alembic-revision` to generate a new migration, and `make alembic-upgrade` to run the upgrade to apply the new migration.
 
-
 ## Data analysis modules
 
 Distinct modules for data analysis should have their own folders in the scout package. Where possible each module should use models from the data ingest module. All other models should be placed in a `models.py` file for the module.
 
 Each module should have a corresponding script in the `scripts` folder that runs a pipeline that uses that module.
 
-
 # Troubleshooting
 
 ## Docker issues
+
 If you have issues on `docker compose build` with permissions, for example:
+
 ```
 Error response from daemon: error while creating mount source path '/Users/<username>/scout/data/objectstore'
 ```
 
 You can update the permissions using:
+
 ```
 chmod 755 /Users/<username>/scout/libreoffice_service/config
 ```
@@ -123,12 +133,11 @@ chmod 755 /Users/<username>/scout/libreoffice_service/config
 
 This command resets your local database (make sure you have it running in Docker: `docker compose up db`).
 
-Make sure you have psql installed through brew `brew install postgresql`. 
+Make sure you have psql installed through brew `brew install postgresql`.
 
 The local postgresql service needs to be stopped before running this `make` command: `brew services stop postgresql`.
 
 If the db/tables can't be found, check that you've run `poetry run alembic upgrade head` (or `make alembic-upgrade`) and that the `db` container is running.
-
 
 # Tests
 
@@ -149,9 +158,10 @@ The other test files contain unit tests.
 1. Ensure your local `.env` contains `LIBREOFFICE_URL`, API keys etc. (see the `.env.example` for what needs to be included).
 2. Run the database, Minio and Libreoffice `docker compose up db minio libreoffice`
 3. Run the tests using pytest. The tests require the DB to be empty for the tests to pass. These can be run from the root folder using the flag `--reset-db` to reset the DB before running the tests. The flag accepts `postgres`, `vector_store` and `all` as arguments with `all` being recommended. The `-v` flag is for verbose output. Note that the integration tests may take a while (~10 minutes).
-4. Example usage: 
-- `poetry run pytest tests/test_CreateDBPipeline.py --reset-db all -v`, 
-- `poetry run pytest tests/test_LLMFlag.py --reset-db all -v`. 
+4. Example usage:
+
+- `poetry run pytest tests/test_CreateDBPipeline.py --reset-db all -v`,
+- `poetry run pytest tests/test_LLMFlag.py --reset-db all -v`.
 - `poetry run pytest tests/test_file_update.py` (can be run without resetting DB)
 - `poetry run pytest tests/test_create_db.py` (can be run without resetting DB)
 
@@ -160,4 +170,3 @@ The tests should be run from the root folder.
 You can reset your local database after running tests with `make reset-local-db`.
 
 Changing the document count or contents will cause the tests to fail.
-

@@ -254,22 +254,14 @@ class MainEvaluator(BaseEvaluator):
         model_output = self.model(criterion=criterion)
 
         chunks_list = [
-            self.storage_handler.read_item(uuid, Chunk) or ChunkBase(
-                id=uuid,
-                idx=0,
-                text="Unknown",
-                page_num=0,
-                created_datetime="2024-01-01T00:00:00Z",
-                updated_datetime="2024-01-01T00:00:00Z"
-            )
-            for uuid in model_output[2]
+            uuid for uuid in model_output[2]
         ]
         result = ResultCreate(
-            criterion=criterion,
-            project=self.project,
+            criterion=criterion.id,  # Pass UUID instead of Criterion object
+            project=self.project.id,
             answer=model_output[0],
             full_text=model_output[1],
-            chunks=chunks_list,
+            chunks=chunks_list,  # Already UUIDs from model_output[2]
         )
 
         if save:

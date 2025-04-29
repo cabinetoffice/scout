@@ -1,100 +1,38 @@
 "use client";
 
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState } from "react";
 import PieChart from "../components/PieChart";
-import { getGateUrl } from "../utils/getGateUrl";
-import { fetchUser, fetchReadItemsByAttribute, fetchItems } from "../utils/api";
-
-interface Result {
-  answer: string;
-  created_datetime: string;
-  criterion: Criterion;
-  full_text: string;
-  id: string;
-}
-
-interface Criterion {
-  id: string;
-  question: string;
-  evidence: string;
-  category: string;
-  gate: string;
-}
+import { fetchSummaryData } from "../utils/api";
+import { SummaryData } from "../types/SummaryData";
 
 const Summary: React.FC = () => {
   const [chartData, setChartData] = useState<number[]>([]);
   const [chartLabels, setChartLabels] = useState<string[]>([]);
   const [summaryText, setSummaryText] = useState<string>("");
   const [gateUrl, setGateUrl] = useState<string | null>(null);
-  const [categories, setCategories] = useState<{ [key: string]: number }>({});
-  const [criterion, setCriterion] = useState<string>("");
   const [projectDetails, setProjectDetails] = useState<any>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        console.log("Fetching results...");
-        const results = await fetchItems("result");
-        console.log("Results fetched:", results);
+        const data = await fetchSummaryData();
 
-        const fetchCriteria = async (result: Result) => {
-          return await fetchItems("criterion", result.criterion.id);
-        };
+        // Set chart data from answer counts
+        const labels = Object.keys(data.answer_count);
+        const counts = Object.values(data.answer_count);
+        setChartLabels(labels);
+        setChartData(counts);
 
-        const criteria = await Promise.all(results.map(fetchCriteria));
-        const fetchedCategories = criteria.map(
-          (criterion) => criterion.category
-        );
-        console.log("Criterion fetched:", fetchedCategories);
-
-        const categoryCount: { [key: string]: number } = {};
-        fetchedCategories.forEach((category) => {
-          categoryCount[category] = (categoryCount[category] || 0) + 1;
-        });
-
-        const answerCount: { [key: string]: number } = {};
-        results.forEach((result: Result) => {
-          answerCount[result.answer] = (answerCount[result.answer] || 0) + 1;
-        });
-
-        if (results.length > 0) {
-          const firstResult = results[0];
-          if (firstResult.criterion && firstResult.criterion.gate) {
-            setCriterion(firstResult.criterion.gate);
-          }
+        // Set project details
+        if (data.project) {
+          setProjectDetails(data.project);
+          setSummaryText(data.project.results_summary);
         }
 
-        setChartLabels(Object.keys(answerCount));
-        setChartData(Object.values(answerCount));
-
-        console.log("Chart labels:", Object.keys(answerCount));
-        console.log("Chart data:", Object.values(answerCount));
-
-        // Fetching the project details
-        console.log("Fetching project details...");
-        const projectData = await fetchItems("project");
-
-        console.log("Project details fetched:", projectData);
-
-        if (projectData.length > 0) {
-          setProjectDetails(projectData[0]);
-          setSummaryText(projectData[0].results_summary);
-        }
-
-        const firstCriterionWithGate = criteria.find(
-          (criterion) => criterion.gate
-        );
-        if (firstCriterionWithGate) {
-          console.log("Found criterion with a gate value.");
-          console.log("Gate URL:", firstCriterionWithGate.gate);
-          setGateUrl(firstCriterionWithGate.gate);
-          console.log("gateUrl:", gateUrl);
-        } else {
-          console.warn("No criterion found with a gate value.");
-          setGateUrl(null);
-        }
+        // Set gate URL
+        setGateUrl(data.gate_url);
       } catch (error) {
-        console.error("Error fetching data:", error);
+        console.error("Error fetching summary data:", error);
       }
     };
 

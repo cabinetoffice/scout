@@ -146,7 +146,7 @@ export default function MyApp({ Component, pageProps }: AppProps) {
     <div className="App">
       <header className="App-header">
         <div className="header-content">
-          <h1>🔎 IPA Scout</h1>
+          <h1>🔎 NISTA Scout</h1>
           <nav className="header-nav">
             {/* Summary Link */}
             <Link href="/" passHref legacyBehavior>

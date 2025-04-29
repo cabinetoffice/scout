@@ -1,3 +1,5 @@
+import { SummaryData } from "@/types/SummaryData";
+
 interface Filters {
   model: string;
   filters: Record<string, any>;
@@ -260,3 +262,11 @@ export const submitQuery = async (query: string): Promise<any> => {
       const data = await res.json();
       return data.url;
     };
+
+export async function fetchSummaryData(): Promise<SummaryData> {
+  const res = await fetch(`/api/summary`);
+  if (!res.ok) {
+    throw new Error("Failed to fetch summary data");
+  }
+  return res.json();
+}

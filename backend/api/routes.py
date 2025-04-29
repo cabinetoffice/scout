@@ -4,10 +4,11 @@ import json
 import logging
 import typing
 from functools import lru_cache
-from typing import Annotated, List
+from typing import Annotated, List, Any
 from typing import Optional
 from uuid import UUID
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 
 import requests
 from fastapi import APIRouter, UploadFile, File
@@ -56,6 +57,12 @@ from starlette.concurrency import run_in_threadpool
 
 import asyncio
 from backend.utils.audit import log_llm_query, log_file_operation
+
+from scout.DataIngest.models.schemas import FileCreate
+from scout.utils.storage.postgres_models import Criterion as SqCriterion
+from scout.utils.storage.postgres_models import Project as SqProject
+from scout.utils.storage.postgres_models import Result as SqResult
+from scout.utils.storage.postgres_models import Project as SqProject
 
 router = APIRouter()
 
@@ -299,6 +306,8 @@ def read_items_by_attribute(
         filter = ResultFilter(
             answer=filters.filters.get("answer", None),
             full_text=filters.filters.get("full_text", None),
+            criterion=filters.filters.get("criterion_id", None),  # Use UUID
+            project=filters.filters.get("project_id", None)      # Use UUID
         )
         items = interface.filter_items(filter, current_user)
     if model is PyCriterion:
@@ -620,6 +629,18 @@ async def upload_files(
             await run_in_threadpool(
                 lambda: s3_client.upload_fileobj(file.file, s3_bucket, file.filename)
             )
+            
+            # Create database entry for the file
+            file_create = FileCreate(
+                name=file.filename,
+                type=os.path.splitext(file.filename)[1],
+                s3_bucket=s3_bucket,
+                s3_key=file.filename,
+                storage_kind="s3",
+                project_id=current_user.projects[0].id if current_user.projects else None
+            )
+            interface.get_or_create_item(file_create)
+            
             uploaded.append(file.filename)
             
             # Log the file upload using the previously captured size
@@ -645,7 +666,8 @@ async def delete_file(
     key: str,
     current_user: PyUser = Depends(get_current_user),
     s3_client: boto3.client = Depends(get_s3_client),
-    request: Request = None
+    request: Request = None,
+    db: Any = Depends(get_db) 
 ):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Forbidden")
@@ -672,7 +694,17 @@ async def delete_file(
         
         # S3 operations might be blocking, consider running in thread pool
         await run_in_threadpool(lambda: s3_client.delete_object(Bucket=s3_bucket, Key=key))
+               
+        # Delete from database
+        file_to_delete = db.query(FileTable).filter(
+            FileTable.s3_bucket == s3_bucket,
+            FileTable.s3_key == key
+        ).first()
         
+        if file_to_delete:
+            db.delete(file_to_delete)
+            db.commit()
+            
         # Log the file deletion
         if request:
             asyncio.create_task(log_file_operation(
@@ -682,7 +714,8 @@ async def delete_file(
                 file_details={
                     "filename": key,
                     "bucket": s3_bucket,
-                    "metadata": serializable_metadata
+                    "metadata": serializable_metadata,
+                    "db_file_id": str(file_to_delete.id) if file_to_delete else None
                 }
             ))
             
@@ -690,6 +723,10 @@ async def delete_file(
     except (ClientError) as e:
         logging.error(f"Delete failed: {key}, error: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete file")
+    except Exception as e:
+        logging.error(f"Database deletion failed: {key}, error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete file from database")
 
 @router.get("/admin/signed_url")
 def get_signed_url(key: str = Query(...),
@@ -870,4 +907,60 @@ def get_audit_logs(
 
     except Exception as e:
         logger.error(f"Error fetching audit logs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/summary")
+async def get_summary_data(
+    current_user: PyUser = Depends(get_current_user),
+    db: Any = Depends(get_db)
+) -> dict:
+    """Get consolidated summary data for the index page."""
+    try:
+        if not current_user.projects:
+            return {
+                "answer_count": {},
+                "project": None,
+                "gate_url": None
+            }
+            
+        current_project_id = current_user.projects[0].id
+
+        results = (
+            db.query(SqResult)
+            .join(SqCriterion)
+            .join(SqProject)
+            .filter(SqResult.project_id == current_project_id)
+            .options(
+                joinedload(SqResult.criterion),
+                joinedload(SqResult.project)
+            )
+            .all()
+        )
+        
+        # Get project details
+        project = db.query(SqProject).filter(SqProject.id == current_project_id).first()
+
+        # Process data
+        answer_count = {}
+        first_criterion_with_gate = None
+        
+        for result in results:
+            # Count answers
+            answer_count[result.answer] = answer_count.get(result.answer, 0) + 1
+            
+            # Find first criterion with gate
+            if not first_criterion_with_gate and result.criterion and result.criterion.gate:
+                first_criterion_with_gate = result.criterion
+        
+        return {
+            "answer_count": answer_count,
+            "project": {
+                "id": str(project.id),  # Convert UUID to string
+                "name": project.name,
+                "results_summary": project.results_summary
+            } if project else None,
+            "gate_url": first_criterion_with_gate.gate if first_criterion_with_gate else None
+        }
+    except Exception as e:
+        logger.exception("Error getting summary data: %s", str(e))
         raise HTTPException(status_code=500, detail=str(e))

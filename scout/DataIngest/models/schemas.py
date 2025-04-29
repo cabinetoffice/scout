@@ -181,7 +181,7 @@ class FileCreate(BaseModel):
     s3_bucket: Optional[str] = None
     s3_key: Optional[str] = None
     storage_kind: str = "local"
-    project: Optional["ProjectBase"] = None
+    project_id: Optional[UUID] = None
     chunks: Optional[list["ChunkBase"]] = Field(default_factory=list)
 
 
@@ -266,9 +266,9 @@ class ResultBase(BaseModel):
 class ResultCreate(BaseModel):
     answer: str
     full_text: str
-    criterion: Optional["CriterionBase"] = None
-    project: Optional["ProjectBase"] = None
-    chunks: Optional[list["ChunkBase"]] = Field(default_factory=list)
+    criterion: Optional[UUID] = None  # Change to UUID
+    project: Optional[UUID] = None    # Change to UUID 
+    chunks: Optional[list[UUID]] = Field(default_factory=list)  # Change to list of UUIDs
 
 
 class ResultUpdate(ResultCreate):
@@ -278,9 +278,9 @@ class ResultUpdate(ResultCreate):
 class ResultFilter(BaseModel):
     answer: Optional[str] = None
     full_text: Optional[str] = None
-    criterion: Optional["CriterionBase"] = []
-    project: Optional["ProjectBase"] = []
-    chunks: Optional[list["ChunkBase"]] = []
+    criterion: Optional[UUID] = None  # Change to UUID
+    project: Optional[UUID] = None    # Change to UUID
+    chunks: Optional[list[UUID]] = [] # Change to list of UUIDs
 
 
 class Result(ResultBase):

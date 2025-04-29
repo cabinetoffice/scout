@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
+import JsonViewerModal from "../components/JsonViewerModal";
 
 const AgGridReact = dynamic(
   () => import("ag-grid-react").then((mod) => mod.AgGridReact),
@@ -54,6 +55,13 @@ const AuditLogsPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [totalRows, setTotalRows] = useState(0);
   const pageSize = 50;
+  const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const handleRowClick = (params: any) => {
+    setSelectedLog(params.data);
+    setModalOpen(true);
+  };
 
   const columnDefs: ColDef[] = [
     {
@@ -221,6 +229,7 @@ const AuditLogsPage: React.FC = () => {
                 const currentPage = params.api.paginationGetCurrentPage();
                 setPage(currentPage + 1);
               }}
+              onRowClicked={handleRowClick}
               defaultColDef={{
                 sortable: true,
                 filter: true,
@@ -239,6 +248,12 @@ const AuditLogsPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      <JsonViewerModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        data={selectedLog}
+      />
     </div>
   );
 };

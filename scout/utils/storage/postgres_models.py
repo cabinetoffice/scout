@@ -2,7 +2,7 @@ import enum
 import uuid
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table, func, JSON
-from sqlalchemy.dialects.postgresql import ENUM, UUID
+from sqlalchemy.dialects.postgresql import ENUM, UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from scout.utils.storage.postgres_database import Base
@@ -198,7 +198,7 @@ class AuditLog(Base):
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     user_id = Column(UUID, ForeignKey("user.id"))
     action_type = Column(String, nullable=False)  # e.g., 'llm_query', 'file_upload', 'file_delete'
-    details = Column(JSON, nullable=True)  # Store additional context as JSON
+    details = Column(JSONB, nullable=True)  # Store additional context as JSONB
     ip_address = Column(String, nullable=True)
     user_agent = Column(String, nullable=True)
 

@@ -520,6 +520,7 @@ async def custom_query(
             asyncio.create_task(log_llm_query(
                 request=request,
                 user_id=current_user.id,
+                project_name=user_projects[0].name,
                 query=query,
                 response=response_payload
             ))

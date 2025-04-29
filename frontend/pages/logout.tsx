@@ -61,10 +61,10 @@ export default function Logout() {
   return (
     <>
       <Head>
-        <title>Logged Out - IPA Scout</title>
+        <title>Logged Out - NISTA Scout</title>
         <meta
           name="description"
-          content="You have been logged out of IPA Scout"
+          content="You have been logged out of NISTA Scout"
         />
       </Head>
 

@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from typing import List, Tuple
+from uuid import UUID
 
 from langchain_core.vectorstores import VectorStore
 
@@ -16,7 +17,7 @@ from scout.utils.utils import logger
 
 
 def create_file_from_presigned_url(
-    presigned_url: str, project: Project, s3_storage_handler: S3StorageHandler, storage_handler: PostgresStorageHandler
+    presigned_url: str, project_id: UUID, s3_storage_handler: S3StorageHandler, storage_handler: PostgresStorageHandler
 ) -> File:
     s3_key = s3_key_from_presigned_url(presigned_url)
     logger.info(f"Saving file with S3 key: {s3_key}")
@@ -26,7 +27,7 @@ def create_file_from_presigned_url(
         name=file_name,
         s3_key=s3_key,
         type=os.path.splitext(file_name)[1],
-        project=project,
+        project_id=project_id,
         s3_bucket=s3_storage_handler.bucket_name,
     )
     file = storage_handler.write_item(file_create)
@@ -35,14 +36,14 @@ def create_file_from_presigned_url(
 
 def save_files_to_db_and_temp(
     presigned_urls: List[str],
-    project: Project,
+    project_id: UUID,
     s3_storage_handler: S3StorageHandler,
     storage_handler: PostgresStorageHandler,
 ) -> List[Tuple[File, Path]]:
     """Saves files at the presigned URLs to the database and to a temp folder."""
     created_files = [
         create_file_from_presigned_url(
-            url, project=project, s3_storage_handler=s3_storage_handler, storage_handler=storage_handler
+            url, project_id=project_id, s3_storage_handler=s3_storage_handler, storage_handler=storage_handler
         )
         for url in presigned_urls
     ]
@@ -125,7 +126,7 @@ def ingest_project_files(
     presigned_urls = s3_storage_handler.presigned_url_list(sanitise_project_name(project.name) + "/processed/")
     files_to_chunk = save_files_to_db_and_temp(
         presigned_urls=presigned_urls,
-        project=project,
+        project_id=project.id,
         s3_storage_handler=s3_storage_handler,
         storage_handler=storage_handler,
     )

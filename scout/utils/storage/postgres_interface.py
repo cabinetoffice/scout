@@ -367,7 +367,7 @@ def _get_or_create_file(
         s3_bucket=model.s3_bucket,
         s3_key=model.s3_key,
         storage_kind=model.storage_kind,
-        project_id=model.project.id,
+        project_id=model.project_id,
     )
     db.add(item_to_add)
     db.commit()
@@ -397,16 +397,18 @@ def _get_or_create_result(
     item_to_add = sq_model(
         answer=model.answer,
         full_text=model.full_text,
-        project_id=model.project.id,
-        criterion_id=model.criterion.id,
+        project_id=model.project,  # Now using UUID directly
+        criterion_id=model.criterion,  # Now using UUID directly
     )
     db.add(item_to_add)
     db.commit()
     db.flush()  # Refresh created item to add ID to it
     
-    for chunk in model.chunks:
-        existing_chunk: SqChunk | None = db.query(SqChunk).get(chunk.id)
-        
+    for chunk_id in model.chunks:  # Now iterating over UUIDs
+        existing_chunk: SqChunk | None = db.query(SqChunk).get(chunk_id)
+        if not existing_chunk:
+            continue
+            
         # Check if the entry already exists before inserting
         existing_result_chunk = db.execute(
             select(result_chunks).where(
@@ -419,18 +421,19 @@ def _get_or_create_result(
             try:
                 db.execute(
                     insert(result_chunks).values(
-                        chunk_id=existing_chunk.id, result_id=item_to_add.id
+                        chunk_id=existing_chunk.id,
+                        result_id=item_to_add.id
                     )
                 )
                 db.commit()
             except IntegrityError as e:
                 db.rollback()
-                print("IntegrityError during insertion:", e)
+                logger.error("IntegrityError during insertion: %s", e)
                 # Ignore only if the error is due to a duplicate key violation
                 if "duplicate key value violates unique constraint" not in str(e):
                     raise
         else:
-            print("result_chunks already exists, not adding")
+            logger.debug("result_chunks already exists, not adding")
     
     db.flush()
     return PyResult.model_validate(item_to_add)
@@ -891,14 +894,18 @@ def _filter_result(model: ResultFilter, db: Session, current_user: PyUser) -> li
     if model.full_text:
         query = query.filter(SqResult.full_text.ilike(f"%{model.full_text}%"))
     if model.criterion:
-        query = query.filter(SqResult.criterion_id == model.criterion.id)
+        query = query.filter(SqResult.criterion_id == model.criterion)
     if model.project:
-        query = query.filter(SqResult.project_id == model.project.id)
+        query = query.filter(SqResult.project_id == model.project)
 
     if model.chunks:
-        chunk_ids = [chunk.id for chunk in model.chunks]
         query = query.join(result_chunks, SqResult.id == result_chunks.c.result_id)
-        query = query.filter(or_(result_chunks.c.chunk_id.in_(chunk_ids)))
+        query = query.filter(or_(result_chunks.c.chunk_id.in_(model.chunks)))
+
+    # Only filter by user's projects if there is a current_user and they are not admin
+    if current_user is not None and current_user.role != "admin":
+        user_project_ids = [project.id for project in current_user.projects]
+        query = query.filter(SqResult.project_id.in_(user_project_ids))
 
     result = query.all()
     results = []

@@ -1,6 +1,6 @@
 import React from "react";
 import { Modal, Box, Typography, Tabs, Tab } from "@mui/material";
-import { AuditLog } from "../types/audit";
+import { AuditLog } from "../types/AuditLog";
 
 interface JsonViewerModalProps {
   open: boolean;

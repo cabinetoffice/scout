@@ -22,6 +22,7 @@ from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from backend.utils.associate_user_project_request import AssociateUserToProjectRequest
+from backend.utils.associate_user_role_request import AssociateUserToRoleRequest
 from backend.utils.filters import Filters
 from backend.utils.rating_request import RatingRequest
 from scout.DataIngest.models.schemas import (
@@ -520,6 +521,7 @@ async def custom_query(
             asyncio.create_task(log_llm_query(
                 request=request,
                 user_id=current_user.id,
+                project_name=user_projects[0].name,
                 query=query,
                 response=response_payload
             ))
@@ -964,3 +966,31 @@ async def get_summary_data(
     except Exception as e:
         logger.exception("Error getting summary data: %s", str(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/admin/update_user")
+def update_user(
+    associateUserToRoleRequest: AssociateUserToRoleRequest,
+    current_user: PyUser = Depends(get_current_user),
+):
+    """Updates a user's role."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    try:
+        user = interface.get_by_id(PyUser, associateUserToRoleRequest.user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        updated_user = interface.update_item(
+            UserUpdate(
+                id=user.id,
+                email=user.email,
+                updated_datetime=datetime.utcnow(),
+                role=associateUserToRoleRequest.role
+            )
+        )
+        return updated_user
+    
+    except Exception as e:
+        logger.error(f"Error updating user: {e}")
+        raise HTTPException(status_code=500, detail=f"Error updating user: {e}")

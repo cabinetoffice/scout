@@ -14,6 +14,7 @@ import {
   fetchAdminUsers,
   fetchProjectsAsAdmin,
   createUser,
+  updateUser,
 } from "@/utils/api";
 
 interface Project {
@@ -85,55 +86,80 @@ export default function AdminPage() {
           emails: [formUser.email],
         });
         console.log("New user created:", newUser);
+
+        // Fetch the updated user list to get the new user's ID
+        await fetchUsers();
+        const createdUser = users.find((u) => u.email === formUser.email);
+
+        if (createdUser && formUser.role) {
+          await updateUser({
+            user_id: createdUser.id,
+            role: formUser.role,
+          });
+        }
+
         fetchUsers();
       } catch (error) {
         console.error("Error creating new user:", error);
       }
     } else {
-      const updatedUser = { ...formUser };
-      const updated = [...users];
-      updated[editingIndex] = updatedUser;
-      setUsers(updated);
+      try {
+        const currentUser = users[editingIndex];
 
-      const user = users[editingIndex];
-      const userProjects = user.projects || [];
-      const formProjects = formUser.projects || [];
-
-      const projectsToRemove = userProjects.filter(
-        (p) => !formProjects.some((fp) => fp.id === p.id)
-      );
-      const projectsToAdd = formProjects.filter(
-        (fp) => !userProjects.some((p) => p.id === fp.id)
-      );
-
-      for (const project of projectsToRemove) {
-        try {
-          await removeUserFromProject({
-            user_id: user.id,
-            project_id: project.id,
+        // Update role if changed
+        if (currentUser.role !== formUser.role) {
+          await updateUser({
+            user_id: currentUser.id,
+            role: formUser.role,
           });
-          console.log(`Removed user ${user.id} from project ${project.id}`);
-        } catch (error) {
-          console.error(
-            `Error removing user ${user.id} from project ${project.id}:`,
-            error
-          );
         }
-      }
 
-      for (const project of projectsToAdd) {
-        try {
-          await addUserToProject({
-            user_id: user.id,
-            project_id: project.id,
-          });
-          console.log(`Added user ${user.id} to project ${project.id}`);
-        } catch (error) {
-          console.error(
-            `Error adding user ${user.id} to project ${project.id}:`,
-            error
-          );
+        const user = users[editingIndex];
+        const userProjects = user.projects || [];
+        const formProjects = formUser.projects || [];
+
+        // Handle project changes
+        const projectsToRemove = userProjects.filter(
+          (p) => !formProjects.some((fp) => fp.id === p.id)
+        );
+        const projectsToAdd = formProjects.filter(
+          (fp) => !userProjects.some((p) => p.id === fp.id)
+        );
+
+        for (const project of projectsToRemove) {
+          try {
+            await removeUserFromProject({
+              user_id: user.id,
+              project_id: project.id,
+            });
+            console.log(`Removed user ${user.id} from project ${project.id}`);
+          } catch (error) {
+            console.error(
+              `Error removing user ${user.id} from project ${project.id}:`,
+              error
+            );
+          }
         }
+
+        for (const project of projectsToAdd) {
+          try {
+            await addUserToProject({
+              user_id: user.id,
+              project_id: project.id,
+            });
+            console.log(`Added user ${user.id} to project ${project.id}`);
+          } catch (error) {
+            console.error(
+              `Error adding user ${user.id} to project ${project.id}:`,
+              error
+            );
+          }
+        }
+
+        // Refresh the users list
+        fetchUsers();
+      } catch (error) {
+        console.error("Error updating user:", error);
       }
     }
 

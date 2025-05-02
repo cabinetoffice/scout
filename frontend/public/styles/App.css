@@ -20,7 +20,7 @@
 
 /* Header */
 .App-header {
-  background-color: #3569A9;
+  background-color: #3569a9;
   color: white;
   width: 100%;
   padding: 10px 20px;
@@ -109,7 +109,8 @@ nav {
 
 /* Links */
 .App-link {
-  color: #61dafb;
+  color: #3569a9;
+  text-decoration: none;
 }
 
 .ag-theme-alpine .ag-header-cell-label {
@@ -190,7 +191,8 @@ nav {
   align-items: left;
 }
 
-.markdown-content h1, .markdown-content h2 {
+.markdown-content h1,
+.markdown-content h2 {
   color: #333;
 }
 

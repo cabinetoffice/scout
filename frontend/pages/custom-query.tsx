@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Box, TextField, Button, Paper, Typography } from "@mui/material";
 import { submitQuery } from "@/utils/api";
 
@@ -8,22 +8,34 @@ const CustomQuery = () => {
   const [messages, setMessages] = useState<{ text: string; isUser: boolean }[]>(
     []
   );
+
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const sendMessage = async () => {
-    if (input.trim() === "") return;
-
-    const userMessage = { text: input, isUser: true };
-    setMessages([...messages, userMessage]);
-    setInput("");
+  const handleSendMessage = async (message: string) => {
+    const userMessage = { text: message, isUser: true };
+    setMessages((prevMessages) => [...prevMessages, userMessage]);
     setLoading(true);
 
-    const data = await submitQuery(input);
+    const data = await submitQuery(message);
     const botMessage = { text: JSON.parse(data.body).response, isUser: false };
     setMessages((prevMessages) => [...prevMessages, botMessage]);
     setLoading(false);
   };
+
+  const sendMessage = () => {
+    if (input.trim() === "") return;
+    handleSendMessage(input);
+    setInput("");
+  };
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const query = urlParams.get("query");
+    if (query) {
+      handleSendMessage(query);
+    }
+  }, []);
 
   return (
     <Box sx={{ p: 2 }}>

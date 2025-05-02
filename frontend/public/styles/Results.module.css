@@ -100,4 +100,23 @@
   width: 100%;
 }
 
+.statusChip {
+  display: inline-block;
+  padding: 4px 8px;
+  margin: 4px;
+  border-radius: 4px;
+  color: white;
+  font-size: 14px;
+}
+
+.greyChip {
+  display: inline-block;
+  padding: 4px 8px;
+  margin: 4px;
+  border-radius: 4px;
+  color: black;
+  font-size: 14px;
+  background-color: lightgrey;
+}
+
 /* We won't style MUI chips directly, but pass style props instead */

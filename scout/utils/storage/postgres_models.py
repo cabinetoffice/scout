@@ -1,7 +1,7 @@
 import enum
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table, func, JSON
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table, func, JSON, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ENUM, UUID, JSONB
 from sqlalchemy.orm import relationship
 
@@ -47,19 +47,38 @@ class Rating(Base):
     result = relationship("Result", back_populates="ratings")
 
 
+class RoleEnum(enum.Enum):
+    ADMIN = "ADMIN"
+    UPLOADER = "UPLOADER"
+    USER = "USER"
+
+
+class Role(Base):
+    __tablename__ = "role"
+
+    id = Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
+    name = Column(ENUM(RoleEnum, name="role_enum", create_type=False), nullable=False)
+    description = Column(Text, nullable=True)
+    created_datetime = Column(DateTime(timezone=True), server_default=func.now(), nullable=True)
+    updated_datetime = Column(DateTime(timezone=True), nullable=True)
+
+    users = relationship("User", back_populates="role")
+
+
 class User(Base):
     __tablename__ = "user"
 
-    email = Column(String)
+    email = Column(String, unique=True, nullable=False)
     id = Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
-    created_datetime = Column(DateTime(timezone=True), server_default=func.now())
-    updated_datetime = Column(DateTime(timezone=True), onupdate=func.now())
+    created_datetime = Column(DateTime(timezone=True), server_default=func.now(), nullable=True)
+    updated_datetime = Column(DateTime(timezone=True), nullable=True)
+
+    role_id = Column(UUID(as_uuid=True), ForeignKey("role.id"))
+    role = relationship("Role", back_populates="users")
 
     projects = relationship("Project", secondary="project_users", back_populates="users")
 
     ratings = relationship("Rating", back_populates="user")
-
-    role = Column(String)
 
     audit_logs = relationship("AuditLog", back_populates="user", cascade="all, delete-orphan")
 

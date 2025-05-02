@@ -22,6 +22,7 @@ from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from backend.utils.associate_user_project_request import AssociateUserToProjectRequest
+from backend.utils.associate_user_role_request import AssociateUserToRoleRequest
 from backend.utils.filters import Filters
 from backend.utils.rating_request import RatingRequest
 from scout.DataIngest.models.schemas import (
@@ -44,6 +45,9 @@ from scout.DataIngest.models.schemas import (
     UserFilter,
     UserUpdate,
     AuditLog,
+    RoleEnum,
+    RoleFilter,
+    Role as PyRole,
 )
 from scout.utils.config import Settings
 from scout.utils.storage.postgres_models import project_users
@@ -448,7 +452,7 @@ def get_all_users_with_projects(
 ):
     logger.log(level=logging.INFO, msg=request)
     
-    if current_user.role != "admin":
+    if not is_admin(current_user):
         raise HTTPException(status_code=403, detail="Forbidden")
     
     try:
@@ -466,7 +470,7 @@ def get_all_projects(
 ):
     logger.log(level=logging.INFO, msg=request)
     
-    if current_user.role != "admin":
+    if not is_admin(current_user):
         raise HTTPException(status_code=403, detail="Forbidden")
     
     try:
@@ -584,7 +588,7 @@ def get_all_files(
 
     logger.log(level=logging.INFO, msg=request)
     
-    if current_user.role != "admin":
+    if not is_admin(current_user):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     try:
@@ -612,7 +616,7 @@ async def upload_files(
     s3_client: boto3.client = Depends(get_s3_client),
     request: Request = None
 ):
-    if current_user.role != "admin":
+    if not (is_admin(current_user) or is_uploader(current_user)):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     # Get the S3 bucket for the user's project
@@ -670,7 +674,7 @@ async def delete_file(
     request: Request = None,
     db: Any = Depends(get_db) 
 ):
-    if current_user.role != "admin":
+    if not is_admin(current_user):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     if not key:
@@ -734,7 +738,7 @@ def get_signed_url(key: str = Query(...),
     current_user: PyUser = Depends(get_current_user),
     s3_client: boto3.client = Depends(get_s3_client),):
     
-    if current_user.role != "admin":
+    if not is_admin(current_user):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     try:
@@ -870,7 +874,7 @@ def get_audit_logs(
     page_size: int = Query(50, ge=1, le=100),
 ):
     """Get paginated audit logs with optional filtering."""
-    if current_user.role != "admin":
+    if not is_admin(current_user):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     try:
@@ -965,3 +969,42 @@ async def get_summary_data(
     except Exception as e:
         logger.exception("Error getting summary data: %s", str(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/admin/update_user")
+def update_user(
+    associateUserToRoleRequest: AssociateUserToRoleRequest,
+    current_user: PyUser = Depends(get_current_user),
+):
+    """Updates a user's role."""
+    if not current_user.role or current_user.role.name != RoleEnum.ADMIN:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    try:
+        user = interface.get_by_id(PyUser, associateUserToRoleRequest.user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        # Get the role from the role table
+        role = interface.filter_items(RoleFilter(name=associateUserToRoleRequest.role), None)
+        if not role:
+            raise HTTPException(status_code=404, detail="Role not found")
+            
+        updated_user = interface.update_item(
+            UserUpdate(
+                id=user.id,
+                email=user.email,
+                updated_datetime=datetime.utcnow(),
+                role_id=role[0].id
+            )
+        )
+        return updated_user
+    
+    except Exception as e:
+        logger.error(f"Error updating user: {e}")
+        raise HTTPException(status_code=500, detail=f"Error updating user: {e}")
+
+def is_admin(user: PyUser) -> bool:
+    return user.role and user.role.name == RoleEnum.ADMIN
+
+def is_uploader(user: PyUser) -> bool:
+    return user.role and user.role.name == RoleEnum.UPLOADER

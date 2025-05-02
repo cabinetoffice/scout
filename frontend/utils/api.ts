@@ -263,6 +263,23 @@ export const submitQuery = async (query: string): Promise<any> => {
       return data.url;
     };
 
+interface UpdateUserRequest {
+    user_id: string;
+    role: string;
+}
+
+export const updateUser = async (updateUserRequest: UpdateUserRequest): Promise<{ message: string }> => {
+    const response = await fetch(`/api/admin/update_user`, {
+        method: 'POST',
+        body: JSON.stringify(updateUserRequest),
+    });
+    if (!response.ok) {
+        console.error(`Error updating user ${updateUserRequest.user_id}:`);
+        throw new Error('Failed to update user');
+    }
+    return response.json();
+};
+
 export async function fetchSummaryData(): Promise<SummaryData> {
   const res = await fetch(`/api/summary`);
   if (!res.ok) {

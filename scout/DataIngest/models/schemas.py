@@ -48,7 +48,6 @@ class RatingFilter(BaseModel):
     project: Optional["ProjectBase"] = None
     result: Optional["ResultBase"] = None
 
-
 class Rating(RatingBase):
     user: "UserBase"
     project: "ProjectBase"
@@ -290,34 +289,66 @@ class Result(ResultBase):
     ratings: Optional[list["RatingBase"]] = Field(default_factory=list)
 
 
+class RoleEnum(str, Enum):
+    ADMIN = "ADMIN"
+    UPLOADER = "UPLOADER"
+    USER = "USER"
+
+class RoleBase(BaseModel):
+    model_config = global_model_config
+    
+    id: UUID
+    name: RoleEnum
+    description: Optional[str] = None
+    created_datetime: Optional[datetime] = None
+    updated_datetime: Optional[datetime] = None
+
+class RoleCreate(BaseModel):
+    name: RoleEnum
+    description: Optional[str] = None
+
+class RoleUpdate(RoleCreate):
+    id: UUID
+    updated_datetime: datetime = Field(default_factory=datetime.utcnow)
+    
+class Role(RoleBase):
+    pass
+class RoleFilter(BaseModel):
+    name: Optional[RoleEnum] = None
+    description: Optional[str] = None
+    created_datetime: Optional[datetime] = None
+    updated_datetime: Optional[datetime] = None
+
+    class Config:
+        use_enum_values = True
 class UserBase(BaseModel):
     model_config = global_model_config
 
     id: UUID
     email: str
     created_datetime: datetime
-    updated_datetime: Optional[datetime]
-    role: Optional[str] = None
-    # review_type: str  # Where has this come from
-
+    updated_datetime: Optional[datetime] = None
+    role_id: Optional[UUID] = None
 
 class UserCreate(BaseModel):
     email: str
+    role_id: Optional[UUID] = None
 
-class UserUpdate(UserCreate):
+class UserUpdate(BaseModel):
     id: UUID
+    email: str
+    role_id: Optional[UUID] = None
     updated_datetime: datetime = Field(default_factory=datetime.utcnow)
-    role: Optional[str] = None
 
 class UserFilter(BaseModel):
     email: Optional[str] = None
     projects: Optional[List["ProjectBase"]] = []
-    role: Optional[str] = None
+    role_id: Optional[UUID] = None
 
 class User(UserBase):
-    # Allows pydantic/sqlalchemy to use ORM to pull out related objects instead of just references to them
     projects: List["ProjectBase"] = Field(default_factory=list)
     ratings: List["RatingBase"] = Field(default_factory=list)
+    role: Optional[Role] = None
 
 
 class SourceEnum(str, Enum):

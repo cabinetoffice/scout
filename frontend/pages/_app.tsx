@@ -10,11 +10,15 @@ import { fetchUser, logoutUser, fetchAdminUsers } from "../utils/api";
 
 interface User {
   email: string;
-  role: string;
+  role?: {
+    name: string;
+  };
 }
 interface AdminUser {
   email: string;
-  role: string;
+  role: {
+    name: string;
+  };
 }
 
 export default function MyApp({ Component, pageProps }: AppProps) {
@@ -43,22 +47,20 @@ export default function MyApp({ Component, pageProps }: AppProps) {
 
           const match = adminList.find(
             (adminUser: AdminUser) =>
-              adminUser.email === userData?.email && adminUser.role === "admin"
+              adminUser.email === userData?.email &&
+              adminUser.role.name === "ADMIN"
           );
           setIsAdmin(!!match);
-          console.log("setIsAdmin:", !!match);
         } else {
           setIsAdmin(false); // Not admin if not logged in
         }
       } catch (error) {
         console.error("Error fetching user or admin users:", error);
-        setUser(null); // Ensure user is null on error
         setIsAdmin(false);
       } finally {
         setLoading(false);
       }
     };
-
     getUserDetails();
   }, []); // Fetch user details only once on mount
 

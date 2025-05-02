@@ -17,6 +17,12 @@ import {
   updateUser,
 } from "@/utils/api";
 
+const roles = [
+  { name: "ADMIN", color: "#f54242" }, // Red for admin
+  { name: "UPLOADER", color: "#2196f3" }, // Blue for uploader
+  { name: "USER", color: "#4caf50" }, // Green for regular users
+];
+
 interface Project {
   id: string;
   name: string;
@@ -24,11 +30,17 @@ interface Project {
   updated_datetime?: string;
   results_summary?: any;
 }
-
+interface Role {
+  id: string;
+  name: string;
+  description?: string;
+  created_datetime?: string;
+  updated_datetime?: string;
+}
 interface User {
   id: string;
   email: string;
-  role: string;
+  role: Role;
   projects?: Project[];
 }
 
@@ -38,10 +50,34 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const RoleSelector = ({
+    selectedRole,
+    onRoleSelect,
+  }: {
+    selectedRole: Role;
+    onRoleSelect: (roleName: string) => void;
+  }) => (
+    <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+      {roles.map((role) => (
+        <Chip
+          key={role.name}
+          label={role.name}
+          onClick={() => onRoleSelect(role.name)}
+          variant={selectedRole.name === role.name ? "filled" : "outlined"}
+          style={{
+            backgroundColor:
+              selectedRole.name === role.name ? role.color : "transparent",
+            color: selectedRole.name === role.name ? "white" : "inherit",
+            cursor: "pointer",
+          }}
+        />
+      ))}
+    </div>
+  );
   const [formUser, setFormUser] = useState<User>({
     id: "",
     email: "",
-    role: "",
+    role: { id: "", name: "" },
     projects: [],
   });
   const [allProjects, setAllProjects] = useState<Project[]>([]);
@@ -91,10 +127,15 @@ export default function AdminPage() {
         await fetchUsers();
         const createdUser = users.find((u) => u.email === formUser.email);
 
-        if (createdUser && formUser.role) {
+        if (!createdUser) {
+          console.error("User not found for email:", formUser.email);
+          return;
+        }
+
+        if (createdUser.role.name !== formUser.role.name) {
           await updateUser({
             user_id: createdUser.id,
-            role: formUser.role,
+            role: formUser.role.name,
           });
         }
 
@@ -107,10 +148,10 @@ export default function AdminPage() {
         const currentUser = users[editingIndex];
 
         // Update role if changed
-        if (currentUser.role !== formUser.role) {
+        if (currentUser.role.name !== formUser.role.name) {
           await updateUser({
             user_id: currentUser.id,
-            role: formUser.role,
+            role: formUser.role.name,
           });
         }
 
@@ -168,7 +209,7 @@ export default function AdminPage() {
     setFormUser({
       id: "",
       email: "",
-      role: "",
+      role: { id: "", name: "" },
       projects: [],
     });
   };
@@ -240,6 +281,20 @@ export default function AdminPage() {
       flex: 1,
       cellStyle: { textAlign: "center" },
       headerClass: "center-header",
+      cellRenderer: (params: ICellRendererParams) => {
+        const roleConfig = roles.find((r) => r.name === params.value?.name);
+        return roleConfig ? (
+          <Chip
+            label={roleConfig.name}
+            style={{
+              backgroundColor: roleConfig.color,
+              color: "white",
+            }}
+          />
+        ) : (
+          params.value?.name || "No role"
+        );
+      },
     },
     {
       headerName: "Projects",
@@ -324,7 +379,12 @@ export default function AdminPage() {
           <button
             onClick={() => {
               setEditingIndex(null);
-              setFormUser({ id: "", email: "", role: "", projects: [] });
+              setFormUser({
+                id: "",
+                email: "",
+                role: { id: "", name: "" },
+                projects: [],
+              });
               setShowForm(true);
             }}
             style={addButtonStyles}
@@ -382,13 +442,14 @@ export default function AdminPage() {
             />
 
             <label style={formLabelStyle}>Role</label>
-            <input
-              type="text"
-              value={formUser.role}
-              onChange={(e) =>
-                setFormUser((prev) => ({ ...prev, role: e.target.value }))
+            <RoleSelector
+              selectedRole={formUser.role}
+              onRoleSelect={(roleName) =>
+                setFormUser((prev) => ({
+                  ...prev,
+                  role: { ...prev.role, name: roleName },
+                }))
               }
-              style={formInputStyle}
             />
 
             <label style={formLabelStyle}>Projects</label>
@@ -433,7 +494,7 @@ export default function AdminPage() {
                   setFormUser({
                     id: "",
                     email: "",
-                    role: "",
+                    role: { id: "", name: "" },
                     projects: [],
                   });
                 }}

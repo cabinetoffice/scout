@@ -40,6 +40,9 @@ from scout.DataIngest.models.schemas import UserCreate
 from scout.DataIngest.models.schemas import UserFilter
 from scout.DataIngest.models.schemas import UserUpdate
 from scout.DataIngest.models.schemas import AuditLog as PyAuditLog
+from scout.DataIngest.models.schemas import RoleFilter
+from scout.DataIngest.models.schemas import Role as PyRole
+from scout.DataIngest.models.schemas import RoleEnum
 from scout.utils.storage.filesystem import S3StorageHandler
 from scout.utils.storage.postgres_database import SessionLocal
 from scout.utils.storage.postgres_models import Chunk as SqChunk
@@ -54,6 +57,7 @@ from scout.utils.storage.postgres_models import Result as SqResult
 from scout.utils.storage.postgres_models import result_chunks
 from scout.utils.storage.postgres_models import User as SqUser
 from scout.utils.storage.postgres_models import AuditLog as SqAuditLog
+from scout.utils.storage.postgres_models import Role as SqRole
 # Pydantic models
 # SqlAlchemy models
 
@@ -83,6 +87,7 @@ pydantic_model_to_sqlalchemy_model_map = {
     RatingCreate: SqRating,
     RatingUpdate: SqRating,
     PyAuditLog: SqAuditLog,
+    PyRole: SqRole,
 }
 
 pydantic_update_model_to_base_model = {
@@ -152,9 +157,9 @@ def get_all(
 
 
 def get_by_id(
-    model: PyCriterion | PyChunk | PyFile | PyProject | PyResult | PyUser | PyRating,
+    model: PyCriterion | PyChunk | PyFile | PyProject | PyResult | PyUser | PyRating | PyRole,
     object_id: UUID,
-) -> PyCriterion | PyChunk | PyFile | PyProject | PyResult | PyUser | PyRating | None:
+) -> PyCriterion | PyChunk | PyFile | PyProject | PyResult | PyUser | PyRole | None:
     with SessionManager() as db:
         try:
             sq_model = pydantic_model_to_sqlalchemy_model_map.get(model)
@@ -710,8 +715,8 @@ def _update_result(model: ResultUpdate, db: Session) -> PyResult | None:
     return PyResult.model_validate(item)
 
 def filter_items(
-    model: UserFilter | ProjectFilter | ResultFilter | ChunkFilter | CriterionFilter | FileFilter | RatingFilter, current_user: PyUser
-) -> list[PyUser | PyProject | PyResult | PyChunk | PyCriterion | PyFile | PyRating]:
+    model: UserFilter | ProjectFilter | ResultFilter | ChunkFilter | CriterionFilter | FileFilter | RatingFilter | RoleFilter, current_user: PyUser
+) -> list[PyUser | PyProject | PyResult | PyChunk | PyCriterion | PyFile | PyRating | PyRole]:
     model_type = type(model)
     with SessionManager() as db:
         try:
@@ -729,6 +734,8 @@ def filter_items(
                 return _filter_file(model, db, current_user)
             if model_type is RatingFilter:
                 return _filter_rating(model, db, current_user)
+            if model_type is RoleFilter:
+                return _filter_role(model, db)
         except Exception as e:
             logger.exception(f"Failed to filter items, {model}: {e}")
             return []
@@ -750,6 +757,23 @@ def _filter_rating(model, db):
         results.append(PyRating.model_validate(item))
     return results
 
+def _filter_role(model: RoleFilter, db: Session) -> list[PyRole]:
+    query = db.query(SqRole)
+    
+    if model.name:
+        query = query.filter(SqRole.name == model.name)
+    if model.description:
+        query = query.filter(SqRole.description.ilike(f"%{model.description}%"))
+    if model.created_datetime:
+        query = query.filter(SqRole.created_datetime >= model.created_datetime)
+    if model.updated_datetime:
+        query = query.filter(SqRole.updated_datetime >= model.updated_datetime)
+
+    result = query.all()
+    results: list[PyRole] = []
+    for item in result:
+        results.append(PyRole.model_validate(item))
+    return results
 
 def _filter_user(model: UserFilter, db: Session) -> list[PyUser]:
     query = db.query(SqUser)
@@ -851,7 +875,7 @@ def _filter_project(model: ProjectFilter, db: Session, current_user: PyUser) -> 
     query = db.query(SqProject)
    
     # If the current user is not an admin, filter by projects associated with the user
-    if current_user.role != "admin":
+    if current_user.role.name != RoleEnum.ADMIN:
         user_project_ids = [project.id for project in current_user.projects]
         query = query.filter(SqProject.id.in_(user_project_ids))
         
@@ -903,7 +927,7 @@ def _filter_result(model: ResultFilter, db: Session, current_user: PyUser) -> li
         query = query.filter(or_(result_chunks.c.chunk_id.in_(model.chunks)))
 
     # Only filter by user's projects if there is a current_user and they are not admin
-    if current_user is not None and current_user.role != "admin":
+    if current_user is not None and current_user.role.name != RoleEnum.ADMIN:
         user_project_ids = [project.id for project in current_user.projects]
         query = query.filter(SqResult.project_id.in_(user_project_ids))
 

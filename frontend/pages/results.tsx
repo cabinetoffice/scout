@@ -19,6 +19,7 @@ import HelpIcon from "@mui/icons-material/Help";
 
 import { rateResponse } from "@/utils/api";
 import MagnifyingGlassLoader from "../components/Loader";
+import Link from "next/link";
 
 interface Rating {
   id: string;
@@ -164,24 +165,16 @@ const ResultsTable: React.FC = () => {
             <b>{selectedRow.Criterion.question}</b>
           </Typography>
           <div className={styles.chipsContainer}>
-            <Chip
-              label={selectedRow.Status}
-              variant="outlined"
+            <div
               style={{
                 backgroundColor: getStatusChipColor(selectedRow.Status),
-                color: "white",
               }}
-            />
-            <Chip
-              label={selectedRow.Category}
-              variant="outlined"
-              style={{ backgroundColor: "lightgrey" }}
-            />
-            <Chip
-              label={selectedRow.Gate}
-              variant="outlined"
-              style={{ backgroundColor: "lightgrey" }}
-            />
+              className={styles.statusChip}
+            >
+              {selectedRow.Status}
+            </div>
+            <div className={styles.greyChip}>{selectedRow.Category}</div>
+            <div className={styles.greyChip}>{selectedRow.Gate}</div>
           </div>
         </div>
 
@@ -196,8 +189,43 @@ const ResultsTable: React.FC = () => {
           <Typography variant="subtitle2" className={styles.sectionTitle}>
             AI Justification:
           </Typography>
+          <div
+            style={{
+              backgroundColor: "#fff3cd",
+              border: "1px solid #ffeeba",
+              padding: "10px",
+              borderRadius: "4px",
+              marginBottom: "16px",
+            }}
+          >
+            <Typography
+              variant="subtitle2"
+              style={{ fontWeight: "bold", color: "#856404" }}
+            >
+              Important
+            </Typography>
+            <Typography
+              variant="body2"
+              style={{ color: "#856404", marginTop: "4px" }}
+            >
+              This is an experimental service using AI to generate responses.
+              Please verify critical information by consulting official GOV.UK
+              guidance.
+            </Typography>
+          </div>
           <Typography variant="body1" className={styles.sectionText}>
             {selectedRow.Justification}
+          </Typography>
+          <Typography variant="body1" className={styles.sectionText}>
+            <Link
+              href={`/custom-query?query=${encodeURIComponent(
+                selectedRow.Criterion.question
+              )}`}
+              passHref
+              legacyBehavior
+            >
+              <a className="App-link">Explore further</a>
+            </Link>
           </Typography>
 
           <Typography variant="subtitle2" className={styles.sectionTitle}>
@@ -222,20 +250,41 @@ const ResultsTable: React.FC = () => {
         </div>
 
         <div className={styles.modalFooter}>
-          <IconButton
-            onClick={() => handleRating(true)}
-            aria-label="thumbs up"
-            disabled={isLoadingDetails}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              marginRight: "20px",
+            }}
           >
-            <ThumbUpIcon style={thumbsUpColour} />
-          </IconButton>
-          <IconButton
-            onClick={() => handleRating(false)}
-            aria-label="thumbs down"
-            disabled={isLoadingDetails}
+            <IconButton
+              onClick={() => handleRating(true)}
+              aria-label="thumbs up"
+            >
+              <ThumbUpIcon style={thumbsUpColour} />
+            </IconButton>
+            <Typography variant="caption" style={{ marginTop: "4px" }}>
+              Helpful
+            </Typography>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+            }}
           >
-            <ThumbDownIcon style={thumbsDownColour} />
-          </IconButton>
+            <IconButton
+              onClick={() => handleRating(false)}
+              aria-label="thumbs down"
+            >
+              <ThumbDownIcon style={thumbsDownColour} />
+            </IconButton>
+            <Typography variant="caption" style={{ marginTop: "4px" }}>
+              Not Helpful
+            </Typography>
+          </div>
         </div>
       </div>
     );

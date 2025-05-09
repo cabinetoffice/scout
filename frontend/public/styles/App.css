@@ -25,18 +25,20 @@
   width: 100%;
   padding: 10px 20px;
   box-sizing: border-box;
-  position: fixed;
   top: 0;
   left: 0;
   z-index: 1000;
 }
+.main-section {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
 
 .header-content {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  max-width: 1200px;
   margin: 0 auto;
+  flex-direction: column;
 }
 
 .header-content h1 {
@@ -142,6 +144,12 @@ nav {
   font-weight: bold;
 }
 
+.user-section {
+  position: fixed;
+  bottom: 0;
+  margin-bottom: 40px;
+}
+
 /* Summary */
 .summary-card {
   padding: 20px;
@@ -165,7 +173,6 @@ nav {
 
 /* Charts */
 .chart-container {
-  margin-top: 20px;
   display: flex;
   justify-content: center;
 }
@@ -234,8 +241,7 @@ nav {
 
 .user-context-menu {
   position: absolute;
-  right: 0;
-  top: 50px;
+  top: -80px;
   background-color: white;
   border: 1px solid #ddd;
   border-radius: 4px;

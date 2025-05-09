@@ -493,7 +493,7 @@ async def custom_query(
     if not user_projects:
         raise HTTPException(status_code=404, detail="No projects found for the current user.")
     
-    knowledge_id = user_projects[0].knowledgebase_id
+    knowledge_id = user_projects[0].knowledgebase_id or os.getenv("AWS_BEDROCK_KB_ID")
     
     if not model_id or not knowledge_id:
         raise HTTPException(status_code=500, detail="Model ID or Knowledge ID not found in environment variables or project table")

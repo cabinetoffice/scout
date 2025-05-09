@@ -99,6 +99,9 @@ const ResultsTable: React.FC = () => {
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [thumbsUpColour, setThumbsUpColour] = useState({ color: "none" });
   const [thumbsDownColour, setThumbsDownColour] = useState({ color: "none" });
+  const [expandEvidence, setExpandEvidence] = useState(false);
+  const [expandJustification, setExpandJustification] = useState(false);
+
   const [page, setPage] = useState(1);
   const [totalRows, setTotalRows] = useState(0);
   const pageSize = 50;
@@ -179,54 +182,69 @@ const ResultsTable: React.FC = () => {
         </div>
 
         <div className={styles.modalContent}>
-          <Typography variant="subtitle2" className={styles.sectionTitle}>
-            Evidence Considered
-          </Typography>
-          <Typography variant="body1" className={styles.sectionText}>
-            {formatEvidence(selectedRow.Evidence)}
-          </Typography>
-
-          <Typography variant="subtitle2" className={styles.sectionTitle}>
-            AI Justification:
-          </Typography>
-          <div
-            style={{
-              backgroundColor: "#fff3cd",
-              border: "1px solid #ffeeba",
-              padding: "10px",
-              borderRadius: "4px",
-              marginBottom: "16px",
-            }}
+          <Typography
+            variant="subtitle2"
+            className={styles.sectionTitle}
+            onClick={() => setExpandJustification(!expandJustification)}
+            style={{ cursor: "pointer" }}
           >
-            <Typography
-              variant="subtitle2"
-              style={{ fontWeight: "bold", color: "#856404" }}
-            >
-              Important
-            </Typography>
-            <Typography
-              variant="body2"
-              style={{ color: "#856404", marginTop: "4px" }}
-            >
-              This is an experimental service using AI to generate responses.
-              Please verify critical information by consulting official GOV.UK
-              guidance.
-            </Typography>
-          </div>
-          <Typography variant="body1" className={styles.sectionText}>
-            {selectedRow.Justification}
+            AI Justification {expandJustification ? "▼" : "▶"}
           </Typography>
-          <Typography variant="body1" className={styles.sectionText}>
-            <Link
-              href={`/custom-query?query=${encodeURIComponent(
-                selectedRow.Criterion.question
-              )}`}
-              passHref
-              legacyBehavior
-            >
-              <a className="App-link">Explore further</a>
-            </Link>
+          {expandJustification && (
+            <div>
+              <div
+                style={{
+                  backgroundColor: "#fff3cd",
+                  border: "1px solid #ffeeba",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  marginBottom: "16px",
+                }}
+              >
+                <Typography
+                  variant="subtitle2"
+                  style={{ fontWeight: "bold", color: "#856404" }}
+                >
+                  Important
+                </Typography>
+                <Typography
+                  variant="body2"
+                  style={{ color: "#856404", marginTop: "4px" }}
+                >
+                  This is an experimental service using AI to generate
+                  responses. Please verify critical information by consulting
+                  official GOV.UK guidance.
+                </Typography>
+              </div>
+              <Typography variant="body2" className={styles.sectionText}>
+                {selectedRow.Justification}
+              </Typography>
+              <Typography variant="body1" className={styles.sectionText}>
+                <Link
+                  href={`/custom-query?query=${encodeURIComponent(
+                    selectedRow.Criterion.question
+                  )}`}
+                  passHref
+                  legacyBehavior
+                >
+                  <a className="App-link">Explore further</a>
+                </Link>
+              </Typography>
+            </div>
+          )}
+          <Typography
+            variant="subtitle2"
+            className={styles.sectionTitle}
+            onClick={() => setExpandEvidence(!expandEvidence)}
+            style={{ cursor: "pointer" }}
+          >
+            Evidence Considered {expandEvidence ? "▼" : "▶"}
           </Typography>
+          {expandEvidence && (
+            <Typography variant="body2" className={styles.sectionText}>
+              {formatEvidence(selectedRow.Evidence)}
+            </Typography>
+          )}
 
           <Typography variant="subtitle2" className={styles.sectionTitle}>
             Sources:

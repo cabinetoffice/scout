@@ -146,130 +146,160 @@ export default function MyApp({ Component, pageProps }: AppProps) {
 
   return (
     <div className="App">
-      <header className="App-header">
-        <div className="header-content">
-          <h1>🔎 NISTA Scout</h1>
-          <nav className="header-nav">
-            {/* Summary Link */}
-            <Link href="/" passHref legacyBehavior>
-              <a className={`nav-link ${isActive("/") ? "active" : ""}`}>
-                Summary
-              </a>
-            </Link>
-
-            {/* Results Link */}
-            <Link href="/results" passHref legacyBehavior>
-              <a className={`nav-link ${isActive("/results") ? "active" : ""}`}>
-                Results
-              </a>
-            </Link>
-
-            {/* Documents Dropdown */}
-            <div className="nav-item-container" ref={documentsMenuRef}>
-              <a
-                href="#" // Use href="#" or similar for non-navigating link
-                onClick={toggleDocumentsSubmenu}
-                className={`nav-link ${
-                  isActive(documentPaths) ? "active" : ""
-                }`}
-              >
-                Documents {showDocumentsSubmenu ? "▲" : "▼"}
-              </a>
-              {showDocumentsSubmenu && (
-                <div className="submenu" ref={documentsSubmenuRef}>
-                  <Link href="/file-viewer" passHref legacyBehavior>
-                    <a
-                      className={`submenu-link ${
-                        isActive("/file-viewer") ? "active" : ""
-                      }`}
-                    >
-                      Viewer
-                    </a>
-                  </Link>
-                  {/* Conditionally render File Browser link based on isAdmin status */}
-                  {isAdmin && (
-                    <Link href="/files-upload" passHref legacyBehavior>
-                      <a
-                        className={`submenu-link ${
-                          isActive("/files-upload") ? "active" : ""
-                        }`}
-                      >
-                        File Upload (Admin)
-                      </a>
-                    </Link>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Custom Query Link */}
-            <Link href="/custom-query" passHref legacyBehavior>
-              <a
-                className={`nav-link ${
-                  isActive("/custom-query") ? "active" : ""
-                }`}
-              >
-                Custom Query
-              </a>
-            </Link>
-
-            {/* Admin Link */}
-            {isAdmin && (
-              <Link href="/admin" passHref legacyBehavior>
-                <a className={`nav-link ${isActive("/admin") ? "active" : ""}`}>
-                  Admin
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: "10px",
+        }}
+      >
+        <header
+          className="App-header"
+          style={{ width: "15%", height: "100vh" }}
+        >
+          <div className="header-content">
+            <h1>🔎 NISTA Scout</h1>
+            <nav
+              className="header-nav"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-start",
+                gap: "10px",
+                width: "max-content",
+              }}
+            >
+              {/* Summary Link */}
+              <Link href="/" passHref legacyBehavior>
+                <a className={`nav-link ${isActive("/") ? "active" : ""}`}>
+                  Summary
                 </a>
               </Link>
-            )}
-          </nav>
-          <div className="user-section">
-            {!loading &&
-              (user ? (
-                <div className="user-profile-container">
-                  <div
-                    ref={userCircleRef}
-                    className="user-initials-circle"
-                    onClick={toggleUserContextMenu}
-                    title={user.email}
-                  >
-                    {getUserInitials()}
-                  </div>
-                  {showUserContextMenu && (
-                    <div ref={userContextMenuRef} className="user-context-menu">
-                      <div className="user-email">{user.email}</div>
-                      <button
-                        onClick={handleLogout}
-                        className="context-menu-button"
+
+              {/* Results Link */}
+              <Link href="/results" passHref legacyBehavior>
+                <a
+                  className={`nav-link ${isActive("/results") ? "active" : ""}`}
+                >
+                  Results
+                </a>
+              </Link>
+
+              {/* Documents Dropdown */}
+              <div className="nav-item-container" ref={documentsMenuRef}>
+                <a
+                  href="#" // Use href="#" or similar for non-navigating link
+                  onClick={toggleDocumentsSubmenu}
+                  className={`nav-link ${
+                    isActive(documentPaths) ? "active" : ""
+                  }`}
+                >
+                  Documents {showDocumentsSubmenu ? "▲" : "▼"}
+                </a>
+                {showDocumentsSubmenu && (
+                  <div className="submenu" ref={documentsSubmenuRef}>
+                    <Link href="/file-viewer" passHref legacyBehavior>
+                      <a
+                        className={`submenu-link ${
+                          isActive("/file-viewer") ? "active" : ""
+                        }`}
                       >
-                        Logout
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="user-profile-container">
-                  <div
-                    ref={userCircleRef}
-                    className="user-initials-circle"
-                    onClick={toggleUserContextMenu}
-                  >
-                    ?
-                  </div>
-                  {showUserContextMenu && (
-                    <div ref={userContextMenuRef} className="user-context-menu">
-                      <Link href="/api/auth/login" passHref legacyBehavior>
-                        <a className="context-menu-button">Login</a>
+                        Viewer
+                      </a>
+                    </Link>
+                    {/* Conditionally render File Browser link based on isAdmin status */}
+                    {isAdmin && (
+                      <Link href="/files-upload" passHref legacyBehavior>
+                        <a
+                          className={`submenu-link ${
+                            isActive("/files-upload") ? "active" : ""
+                          }`}
+                        >
+                          File Upload (Admin)
+                        </a>
                       </Link>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Custom Query Link */}
+              <Link href="/custom-query" passHref legacyBehavior>
+                <a
+                  className={`nav-link ${
+                    isActive("/custom-query") ? "active" : ""
+                  }`}
+                >
+                  Custom Query
+                </a>
+              </Link>
+
+              {/* Admin Link */}
+              {isAdmin && (
+                <Link href="/admin" passHref legacyBehavior>
+                  <a
+                    className={`nav-link ${isActive("/admin") ? "active" : ""}`}
+                  >
+                    Admin
+                  </a>
+                </Link>
+              )}
+            </nav>
+            <div className="user-section">
+              {!loading &&
+                (user ? (
+                  <div className="user-profile-container">
+                    <div
+                      ref={userCircleRef}
+                      className="user-initials-circle"
+                      onClick={toggleUserContextMenu}
+                      title={user.email}
+                    >
+                      {getUserInitials()}
                     </div>
-                  )}
-                </div>
-              ))}
+                    {showUserContextMenu && (
+                      <div
+                        ref={userContextMenuRef}
+                        className="user-context-menu"
+                      >
+                        <div className="user-email">{user.email}</div>
+                        <button
+                          onClick={handleLogout}
+                          className="context-menu-button"
+                        >
+                          Logout
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="user-profile-container">
+                    <div
+                      ref={userCircleRef}
+                      className="user-initials-circle"
+                      onClick={toggleUserContextMenu}
+                    >
+                      ?
+                    </div>
+                    {showUserContextMenu && (
+                      <div
+                        ref={userContextMenuRef}
+                        className="user-context-menu"
+                      >
+                        <Link href="/api/auth/login" passHref legacyBehavior>
+                          <a className="context-menu-button">Login</a>
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                ))}
+            </div>
           </div>
-        </div>
-      </header>
-      <main className="main-content">
-        <Component {...pageProps} adminUsers={adminUsers} />
-      </main>
+        </header>
+        <main className="main-content" style={{ width: "80%" }}>
+          <Component {...pageProps} adminUsers={adminUsers} />
+        </main>
+      </div>
       <footer className="App-footer">
         <div className="footer-content">
           <Link href="/privacy-policy" passHref legacyBehavior>

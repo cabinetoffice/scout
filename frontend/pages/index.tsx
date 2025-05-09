@@ -11,6 +11,7 @@ const Summary: React.FC = () => {
   const [summaryText, setSummaryText] = useState<string>("");
   const [gateUrl, setGateUrl] = useState<string | null>(null);
   const [projectDetails, setProjectDetails] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -39,71 +40,103 @@ const Summary: React.FC = () => {
     fetchData();
   }, []);
 
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+  };
+
   if (!projectDetails) {
     return <div className="summary-card">Loading...</div>;
   }
 
   return (
-    <div>
-      <div>
+    <div
+      className="summary-container"
+      style={{ display: "flex", padding: "20px", gap: "20px" }}
+    >
+      {/* Left Column */}
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          gap: "20px",
+        }}
+      >
+        {/* Welcome Section */}
         <div
           className="summary-card"
           style={{
-            display: "flex",
-            alignItems: "center",
-            marginBottom: "20px",
-            marginTop: "40px",
+            padding: "20px",
+            border: "1px solid #ddd",
+            borderRadius: "8px",
           }}
         >
-          <div style={{ flex: 1 }}>
-            <h2>
-              Welcome to <strong>Scout!</strong>
-            </h2>
-            <p></p>
-            {gateUrl && (
-              <>
+          <h2>
+            Welcome to <strong>Scout!</strong>
+          </h2>
+          {gateUrl && (
+            <>
+              <p>
                 This AI tool helps you navigate your document set before your
                 review. Please check the details below are correct before
-                continuing
-                <ul>
-                  <strong>Review Type:</strong> {gateUrl} <br />
-                  <br />
+                continuing.
+              </p>
+              <ul>
+                <li>
+                  <strong>Review Type:</strong> {gateUrl}
+                </li>
+                <li>
                   <strong>Project Name:</strong> {projectDetails.name}
-                </ul>
-                This tool has preprocessed your documents and analysed them
-                against the questions in the&nbsp;
-                {/* <a href="#" target="_blank" rel="noopener noreferrer"> */}
-                {gateUrl} workbook
-                {/* </a> */}.
-              </>
-            )}
-          </div>
+                </li>
+              </ul>
+              <p>
+                This tool has preprocessed your documents and analyzed them
+                against the questions in the {gateUrl} workbook.
+              </p>
+            </>
+          )}
+        </div>
+
+        {/* Review Summary */}
+        <div
+          className="summary-card"
+          style={{
+            padding: "20px",
+            border: "1px solid #ddd",
+            borderRadius: "8px",
+          }}
+        >
+          <h3>Review Summary</h3>
+          <p>{summaryText}</p>
         </div>
       </div>
 
+      {/* Right Column */}
       <div
-        className="summary-card"
-        style={{ display: "flex", alignItems: "top", marginBottom: "20px" }}
+        className="chart-container"
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          gap: "20px",
+        }}
       >
-        <div style={{ flex: 1 }}>
-          <h2>Review Summary</h2>
-          <p>{summaryText}</p>
-        </div>
-        <div className="chart-container" style={{ flex: 1 }}>
-          <PieChart data={chartData} labels={chartLabels} />
+        <div
+          style={{
+            flex: 1,
+            border: "1px solid #ddd",
+            borderRadius: "8px",
+            padding: "20px",
+          }}
+        >
+          <PieChart
+            data={chartData}
+            labels={chartLabels}
+            onClickURL="/results"
+          />
         </div>
       </div>
-      {chartLabels.map((label, index) => (
-        <div
-          className="summary-card"
-          key={label}
-          style={{ marginBottom: "20px" }}
-        >
-          <h2>{label}</h2>
-          <p>{`Count: ${chartData[index]}`}</p>
-          <a href={`/results?answer=${label}`}>View {label} results</a>
-        </div>
-      ))}
     </div>
   );
 };

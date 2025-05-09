@@ -4,9 +4,10 @@ import * as d3 from "d3";
 interface PieChartProps {
   data: number[];
   labels: string[];
+  onClickURL: string;
 }
 
-const PieChart: React.FC<PieChartProps> = ({ data, labels }) => {
+const PieChart: React.FC<PieChartProps> = ({ data, labels, onClickURL }) => {
   const ref = useRef<SVGSVGElement | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
 
@@ -76,6 +77,12 @@ const PieChart: React.FC<PieChartProps> = ({ data, labels }) => {
       tooltip.transition().duration(200).style("opacity", 0);
     };
 
+    const onClick = (d: d3.PieArcDatum<number>) => {
+      const label = labels[d.index];
+      const url = `${onClickURL}?answer=${encodeURIComponent(label)}`;
+      window.location.href = url;
+    };
+
     svg
       .selectAll("path")
       .data(pie)
@@ -85,6 +92,7 @@ const PieChart: React.FC<PieChartProps> = ({ data, labels }) => {
       .attr("fill", (d, i) => color(i.toString()) as string)
       .on("mouseover", function (event, d) {
         d3.select(this).transition().duration(200).attr("opacity", 0.7);
+        d3.select(this).attr("cursor", "pointer");
         onMouseOver(event as unknown as MouseEvent, d);
       })
       .on("mousemove", function (event, d) {
@@ -93,6 +101,10 @@ const PieChart: React.FC<PieChartProps> = ({ data, labels }) => {
       .on("mouseout", function (event, d) {
         d3.select(this).transition().duration(200).attr("opacity", 1);
         onMouseOut();
+      })
+      .on("click", function (event, d) {
+        d3.select(this).transition().duration(200).attr("opacity", 1);
+        onClick(d);
       });
 
     // Add legend

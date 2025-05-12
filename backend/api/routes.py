@@ -7,7 +7,7 @@ from functools import lru_cache
 from typing import Annotated, List, Any
 from typing import Optional
 from uuid import UUID
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from sqlalchemy.orm import joinedload
 
 import requests
@@ -44,7 +44,7 @@ from scout.DataIngest.models.schemas import (
     UserCreate,
     UserFilter,
     UserUpdate,
-    AuditLog,
+    AuditLog as PyAuditLog,
     RoleEnum,
     RoleFilter,
     Role as PyRole,
@@ -67,6 +67,7 @@ from scout.utils.storage.postgres_models import Criterion as SqCriterion
 from scout.utils.storage.postgres_models import Project as SqProject
 from scout.utils.storage.postgres_models import Result as SqResult
 from scout.utils.storage.postgres_models import Project as SqProject
+from scout.utils.storage.postgres_models import AuditLog
 
 router = APIRouter()
 
@@ -90,7 +91,7 @@ models = {
     "project": PyProject,
     "user": PyUser,
     "rating": PyRating,
-    "audit_log": AuditLog,
+    "audit_log": PyAuditLog,
 }
 
 
@@ -1008,3 +1009,60 @@ def is_admin(user: PyUser) -> bool:
 
 def is_uploader(user: PyUser) -> bool:
     return user.role and user.role.name == RoleEnum.UPLOADER
+
+@router.get("/chat-history")
+def get_chat_history(
+    current_user: PyUser = Depends(get_current_user),
+    db: Any = Depends(get_db),  # Use the database session dependency
+):
+    try:
+        # Query the audit_log table for LLM queries by the current user
+        query = (
+            select(AuditLog)
+            .where(
+                and_(
+                    AuditLog.user_id == current_user.id,
+                    AuditLog.action_type == 'llm_query'  # Ensure this matches your schema
+                )
+            )
+            .order_by(AuditLog.timestamp.desc())
+            .limit(50)
+        )
+
+        # Execute the query using the database session
+        result = db.execute(query).scalars().all()
+
+        # Process the result into a list of dictionaries
+        chat_history = []
+        for log in result:
+            try:
+                # Ensure details is a dictionary
+                details = log.details if isinstance(log.details, dict) else json.loads(log.details)
+                query_text = details.get("query", "Unknown query")
+                response_body = details.get("response", {}).get("body", "Unknown response")
+                
+                # Ensure response_body is a dictionary
+                response_body = response_body if isinstance(response_body, dict) else json.loads(response_body)
+                response_text = response_body.get("response", "Unknown response")
+                
+                chat_history.append({
+                    "query": query_text,
+                    "response": response_text,
+                    "timestamp": log.timestamp.isoformat()
+                })
+            except (json.JSONDecodeError, KeyError, TypeError) as e:
+                logger.error(f"Error parsing details for log {log.id}: {e}")
+                chat_history.append({
+                    "query": "Error parsing query",
+                    "response": "Error parsing response",
+                    "timestamp": log.timestamp.isoformat()
+                })
+
+        return chat_history
+
+    except Exception as e:
+        logger.exception("Error fetching chat history")
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while fetching chat history: {str(e)}"
+        )

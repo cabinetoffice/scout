@@ -1,16 +1,34 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Box, TextField, Button, Paper, Typography } from "@mui/material";
-import { submitQuery } from "@/utils/api";
+import { Box, TextField, Button, Paper, Typography, CircularProgress } from "@mui/material";
+import { submitQuery, fetchChatHistory } from "@/utils/api";
 
 const CustomQuery = () => {
-  const [messages, setMessages] = useState<{ text: string; isUser: boolean }[]>(
-    []
-  );
-
+  const [messages, setMessages] = useState<{ text: string; isUser: boolean }[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+
+  // Load chat history
+  useEffect(() => {
+    const loadChatHistory = async () => {
+      try {
+        const history = await fetchChatHistory();
+        const formattedHistory = history.flatMap((entry: any) => [
+          { text: entry.query, isUser: true },
+          { text: entry.response, isUser: false }
+        ]);
+        setMessages(formattedHistory);
+      } catch (error) {
+        console.error('Failed to load chat history:', error);
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+
+    loadChatHistory();
+  }, []);
 
   const handleSendMessage = async (message: string) => {
     const userMessage = { text: message, isUser: true };
@@ -53,26 +71,32 @@ const CustomQuery = () => {
           }
         }}
       >
-        {messages.map((msg, index) => (
-          <Box
-            key={index}
-            sx={{
-              textAlign: msg.isUser ? "right" : "left",
-              mb: 1,
-            }}
-          >
-            <Typography
+        {loadingHistory ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+            <CircularProgress size={24} />
+          </Box>
+        ) : (
+          messages.map((msg, index) => (
+            <Box
+              key={index}
               sx={{
-                backgroundColor: msg.isUser ? "#DCF8C6" : "#FFF",
-                display: "inline-block",
-                p: 1,
-                borderRadius: 1,
+                textAlign: msg.isUser ? "right" : "left",
+                mb: 1,
               }}
             >
-              {msg.text}
-            </Typography>
-          </Box>
-        ))}
+              <Typography
+                sx={{
+                  backgroundColor: msg.isUser ? "#DCF8C6" : "#FFF",
+                  display: "inline-block",
+                  p: 1,
+                  borderRadius: 1,
+                }}
+              >
+                {msg.text}
+              </Typography>
+            </Box>
+          ))
+        )}
         {loading && (
           <Box sx={{ textAlign: "right", mb: 1 }}>
             <Typography

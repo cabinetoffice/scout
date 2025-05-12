@@ -191,20 +191,12 @@ nav {
 
 /* Privacy Policy */
 .markdown-content {
+  color: #24292e;
+  line-height: 1.6;
+  text-align: left;  /* Add this line to explicitly set left alignment */
   max-width: 800px;
   margin: 0 auto;
   padding: 20px;
-  font-family: Arial, sans-serif;
-  align-items: left;
-}
-
-.markdown-content h1,
-.markdown-content h2 {
-  color: #333;
-}
-
-.markdown-content ul {
-  padding-left: 20px;
 }
 
 /* Keyframes */
@@ -279,4 +271,91 @@ nav {
 a.context-menu-button {
   text-decoration: none;
   display: block;
+}
+
+/* Markdown Styles */
+.markdown-content {
+  color: #24292e;
+  line-height: 1.6;
+  text-align: left;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.markdown-content h1 {
+  font-size: 2em;
+  border-bottom: 1px solid #eaecef;
+  padding-bottom: 0.3em;
+  margin: 1em 0;
+}
+
+.markdown-content h2 {
+  font-size: 1.5em;
+  border-bottom: 1px solid #eaecef;
+  padding-bottom: 0.3em;
+  margin: 1em 0;
+}
+
+.markdown-content h3 {
+  font-size: 1.25em;
+  margin: 1em 0;
+}
+
+.markdown-content p {
+  margin: 1em 0;
+}
+
+.markdown-content ul, 
+.markdown-content ol {
+  padding-left: 2em;
+  margin: 1em 0;
+}
+
+.markdown-content blockquote {
+  margin: 1em 0;
+  padding: 0 1em;
+  color: #6a737d;
+  border-left: 0.25em solid #dfe2e5;
+}
+
+.markdown-content code {
+  background-color: rgba(27,31,35,0.05);
+  border-radius: 3px;
+  font-family: "SFMono-Regular",Consolas,"Liberation Mono",Menlo,Courier,monospace;
+  font-size: 85%;
+  padding: 0.2em 0.4em;
+}
+
+.markdown-content pre {
+  background-color: #f6f8fa;
+  border-radius: 3px;
+  padding: 16px;
+  overflow: auto;
+}
+
+.markdown-content pre code {
+  background-color: transparent;
+  padding: 0;
+}
+
+.markdown-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+}
+
+.markdown-content table th,
+.markdown-content table td {
+  padding: 6px 13px;
+  border: 1px solid #dfe2e5;
+}
+
+.markdown-content table tr {
+  background-color: #fff;
+  border-top: 1px solid #c6cbd1;
+}
+
+.markdown-content table tr:nth-child(2n) {
+  background-color: #f6f8fa;
 }

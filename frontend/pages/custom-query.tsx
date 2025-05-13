@@ -69,7 +69,6 @@ const CustomQuery = () => {
   const [drawerOpen, setDrawerOpen] = useState(true);
   
   // Dialog states
-  const [newSessionDialogOpen, setNewSessionDialogOpen] = useState(false);
   const [editSessionDialogOpen, setEditSessionDialogOpen] = useState(false);
   const [deleteSessionDialogOpen, setDeleteSessionDialogOpen] = useState(false);
   const [sessionTitle, setSessionTitle] = useState("");
@@ -105,10 +104,15 @@ const CustomQuery = () => {
 
   // Load chat history based on active session
   useEffect(() => {
+    if (!activeSessionId) {
+      setMessages([]); // Clear messages if no active session
+      return;
+    }
+
     const loadChatHistory = async () => {
       try {
         setLoadingHistory(true);
-        const history = await fetchChatHistory(activeSessionId || undefined);
+        const history = await fetchChatHistory(activeSessionId);
         
         if (history) {
           const formattedMessages = history.map((msg: ChatMessage) => [
@@ -132,14 +136,10 @@ const CustomQuery = () => {
 
   // Handle creating a new session
   const handleCreateSession = async () => {
-    if (!sessionTitle.trim()) return;
-    
     try {
-      const newSession = await createChatSession(sessionTitle);
+      const newSession = await createChatSession("New Session");
       setSessions([newSession, ...sessions]);
       setActiveSessionId(newSession.id);
-      setNewSessionDialogOpen(false);
-      setSessionTitle("");
     } catch (error) {
       console.error('Failed to create session:', error);
     }
@@ -294,7 +294,19 @@ const CustomQuery = () => {
         }}>
           <Typography variant="h6">Chat Sessions</Typography>
           <IconButton 
-            onClick={() => setNewSessionDialogOpen(true)}
+            onClick={async () => {
+              try {
+                const newSession = await createChatSession("New Chat");
+                setSessions(prev => [newSession, ...prev]);
+                setActiveSessionId(newSession.id);
+                setMessages([]);
+                setInput("");
+                setLoading(false);
+                setLoadingHistory(false);
+              } catch (error) {
+                console.error('Failed to create new session:', error);
+              }
+            }}
             color="primary"
           >
             <AddIcon />
@@ -466,26 +478,6 @@ const CustomQuery = () => {
           <ListItemText>Delete</ListItemText>
         </MenuItem>
       </Menu>
-
-      {/* New Session Dialog */}
-      <Dialog open={newSessionDialogOpen} onClose={() => setNewSessionDialogOpen(false)}>
-        <DialogTitle>New Chat Session</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Session Name"
-            fullWidth
-            variant="outlined"
-            value={sessionTitle}
-            onChange={(e) => setSessionTitle(e.target.value)}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setNewSessionDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleCreateSession} disabled={!sessionTitle.trim()}>Create</Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Edit Session Dialog */}
       <Dialog open={editSessionDialogOpen} onClose={() => setEditSessionDialogOpen(false)}>

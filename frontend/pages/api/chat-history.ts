@@ -7,7 +7,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { headers } = req;
+    const { headers, query } = req;
+
+    // Extract the session_id from the query string
+    const sessionId = query.session_id;
+
     // Extract the OIDC data from the request headers
     const oidcData = headers?.['x-amzn-oidc-data'];
     const formattedOidcData = Array.isArray(oidcData) 
@@ -25,7 +29,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       credentials: "include"
     };
 
-    const response = await fetch(`${process.env.BACKEND_HOST}/api/chat-history`, requestInit);
+    // Append the session_id to the backend URL if it exists
+    const backendUrl = sessionId 
+      ? `${process.env.BACKEND_HOST}/api/chat-history?session_id=${sessionId}`
+      : `${process.env.BACKEND_HOST}/api/chat-history`;
+
+    const response = await fetch(backendUrl, requestInit);
 
     if (!response.ok) {
       const errorText = await response.text();

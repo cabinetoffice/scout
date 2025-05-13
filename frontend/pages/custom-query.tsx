@@ -97,21 +97,24 @@ const CustomQuery = () => {
 
   // Set the active session when sessions are loaded
   useEffect(() => {
-    if (!activeSessionId && sessions.length > 0) {
+    // Only set first session as active on initial load if there's no active session
+    if (sessions.length > 0 && !activeSessionId && !loadingHistory && !loadingSessions) {
       setActiveSessionId(sessions[0].id);
     }
-  }, [sessions, activeSessionId]);
+  }, [sessions, activeSessionId, loadingHistory, loadingSessions]);
 
   // Load chat history based on active session
   useEffect(() => {
+    setMessages([]); // Always clear messages when changing sessions
+    setLoadingHistory(true);
+    
     if (!activeSessionId) {
-      setMessages([]); // Clear messages if no active session
+      setLoadingHistory(false);
       return;
     }
 
     const loadChatHistory = async () => {
       try {
-        setLoadingHistory(true);
         const history = await fetchChatHistory(activeSessionId);
         
         if (history) {
@@ -121,8 +124,6 @@ const CustomQuery = () => {
           ]).flat();
           
           setMessages(formattedMessages);
-        } else {
-          setMessages([]);
         }
       } catch (error) {
         console.error('Failed to load chat history:', error);
@@ -297,12 +298,10 @@ const CustomQuery = () => {
             onClick={async () => {
               try {
                 const newSession = await createChatSession("New Chat");
+                setMessages([]); // Clear messages first
+                setInput(""); // Clear input
                 setSessions(prev => [newSession, ...prev]);
-                setActiveSessionId(newSession.id);
-                setMessages([]);
-                setInput("");
-                setLoading(false);
-                setLoadingHistory(false);
+                setActiveSessionId(newSession.id); // Set new session as active last
               } catch (error) {
                 console.error('Failed to create new session:', error);
               }

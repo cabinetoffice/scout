@@ -287,3 +287,107 @@ export async function fetchSummaryData(): Promise<SummaryData> {
   }
   return res.json();
 }
+
+export const fetchChatHistory = async (sessionId?: string) => {
+  try {
+    const url = sessionId 
+      ? `/api/chat-history?session_id=${sessionId}`
+      : '/api/chat-history';
+      
+    const response = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+    });
+    
+    if (!response.ok) {
+      if (response.status === 401) {
+        // User is not authenticated
+        return null;
+      }
+      throw new Error('Failed to fetch chat history');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching chat history:', error);
+    return null;
+  }
+};
+
+export const fetchChatSessions = async () => {
+  try {
+    const response = await fetch('/api/chat-sessions', {
+      method: 'GET',
+      credentials: 'include',
+    });
+    
+    if (!response.ok) {
+      if (response.status === 401) {
+        return null;
+      }
+      throw new Error('Failed to fetch chat sessions');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching chat sessions:', error);
+    return null;
+  }
+};
+
+export const createChatSession = async (title: string) => {
+  try {
+    const response = await fetch('/api/chat-sessions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ title }),
+      credentials: 'include',
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to create chat session');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error creating chat session:', error);
+    throw error;
+  }
+};
+
+export const updateChatSession = async (sessionId: string, title: string) => {
+  try {
+    const response = await fetch(`/api/chat-sessions/${sessionId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ title }),
+      credentials: 'include',
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to update chat session');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error updating chat session:', error);
+    throw error;
+  }
+};
+
+export const deleteChatSession = async (sessionId: string) => {
+  try {
+    const response = await fetch(`/api/chat-sessions/${sessionId}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to delete chat session');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error deleting chat session:', error);
+    throw error;
+  }
+};

@@ -7,7 +7,7 @@ from functools import lru_cache
 from typing import Annotated, List, Any
 from typing import Optional
 from uuid import UUID
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from sqlalchemy.orm import joinedload
 
 import requests
@@ -48,7 +48,13 @@ from scout.DataIngest.models.schemas import (
     RoleEnum,
     RoleFilter,
     Role as PyRole,
+    # Add these new imports for chat sessions
+    ChatSession as PyChatSession,
+    ChatSessionCreate,
+    ChatSessionUpdate,
 )
+# Also import the SQLAlchemy ChatSession model
+from scout.utils.storage.postgres_models import ChatSession
 from scout.utils.config import Settings
 from scout.utils.storage.postgres_models import project_users
 from scout.utils.storage.postgres_models import File as FileTable
@@ -1013,56 +1019,254 @@ def is_uploader(user: PyUser) -> bool:
 @router.get("/chat-history")
 def get_chat_history(
     current_user: PyUser = Depends(get_current_user),
-    db: Any = Depends(get_db),  # Use the database session dependency
+    db: Any = Depends(get_db),
+    session_id: Optional[UUID] = Query(None, description="Filter by specific chat session ID")
 ):
     try:
-        # Query the audit_log table for LLM queries by the current user
+        # Create a query that joins ChatSession and AuditLog tables
         query = (
             select(AuditLog)
+            .join(
+                ChatSession, 
+                AuditLog.chat_session_id == ChatSession.id, 
+                isouter=True
+            )
             .where(
                 and_(
                     AuditLog.user_id == current_user.id,
-                    AuditLog.action_type == 'llm_query'  # Ensure this matches your schema
+                    AuditLog.action_type == 'llm_query'
                 )
             )
-            .order_by(AuditLog.timestamp.desc())
-            .limit(50)
         )
-
-        # Execute the query using the database session
+        
+        # Filter by session_id if provided
+        if session_id:
+            query = query.where(AuditLog.chat_session_id == session_id)
+            
+        # Order by timestamp descending
+        query = query.order_by(AuditLog.timestamp.desc())
+        
+        # Execute the query
         result = db.execute(query).scalars().all()
-
+        
         # Process the result into a list of dictionaries
         chat_history = []
         for log in result:
             try:
-                # Ensure details is a dictionary
-                details = log.details if isinstance(log.details, dict) else json.loads(log.details)
+                # Process the details JSON
+                details = log.details if isinstance(log.details, dict) else {}
                 query_text = details.get("query", "Unknown query")
-                response_body = details.get("response", {}).get("body", "Unknown response")
                 
-                # Ensure response_body is a dictionary
-                response_body = response_body if isinstance(response_body, dict) else json.loads(response_body)
-                response_text = response_body.get("response", "Unknown response")
+                # Extract response from the nested structure
+                response_data = details.get("response", {})
+                if isinstance(response_data, dict):
+                    response_body = response_data.get("body", "{}")
+                    # The response body might be a JSON string that needs parsing
+                    if isinstance(response_body, str):
+                        try:
+                            response_body_json = json.loads(response_body)
+                            response_text = response_body_json.get("response", "Unknown response")
+                        except json.JSONDecodeError:
+                            response_text = response_body
+                    else:
+                        response_text = response_body.get("response", "Unknown response")
+                else:
+                    response_text = "Unknown response"
                 
                 chat_history.append({
+                    "id": str(log.id),
                     "query": query_text,
                     "response": response_text,
-                    "timestamp": log.timestamp.isoformat()
+                    "timestamp": log.timestamp.isoformat(),
+                    "session_id": str(log.chat_session_id) if log.chat_session_id else None
                 })
-            except (json.JSONDecodeError, KeyError, TypeError) as e:
+            except Exception as e:
                 logger.error(f"Error parsing details for log {log.id}: {e}")
                 chat_history.append({
+                    "id": str(log.id),
                     "query": "Error parsing query",
                     "response": "Error parsing response",
-                    "timestamp": log.timestamp.isoformat()
+                    "timestamp": log.timestamp.isoformat(),
+                    "session_id": str(log.chat_session_id) if log.chat_session_id else None
                 })
-
+        
         return chat_history
-
+        
     except Exception as e:
         logger.exception("Error fetching chat history")
         raise HTTPException(
             status_code=500,
             detail=f"An error occurred while fetching chat history: {str(e)}"
+        )
+
+@router.get("/chat-sessions")
+def get_chat_sessions(
+    current_user: PyUser = Depends(get_current_user),
+    db: Any = Depends(get_db)
+):
+    """Get all chat sessions for the current user."""
+    try:
+        # Query all chat sessions for the current user
+        query = (
+            select(ChatSession)
+            .where(ChatSession.user_id == current_user.id)
+            .order_by(ChatSession.updated_datetime.desc())
+        )
+        
+        # Execute the query
+        result = db.execute(query).scalars().all()
+        
+        # Transform the result
+        sessions = []
+        for session in result:
+            # Count messages in this session
+            message_count_query = (
+                select(func.count())
+                .select_from(AuditLog)
+                .where(
+                    and_(
+                        AuditLog.chat_session_id == session.id,
+                        AuditLog.action_type == 'llm_query'
+                    )
+                )
+            )
+            message_count = db.execute(message_count_query).scalar()
+            
+            sessions.append({
+                "id": str(session.id),
+                "title": session.title,
+                "created_datetime": session.created_datetime.isoformat(),
+                "updated_datetime": session.updated_datetime.isoformat() if session.updated_datetime else None,
+                "message_count": message_count
+            })
+            
+        return sessions
+        
+    except Exception as e:
+        logger.exception("Error fetching chat sessions")
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while fetching chat sessions: {str(e)}"
+        )
+
+@router.post("/chat-sessions")
+def create_chat_session(
+    session_data: ChatSessionCreate,
+    current_user: PyUser = Depends(get_current_user),
+    db: Any = Depends(get_db)
+):
+    """Create a new chat session."""
+    try:
+        # Create a new session
+        session_id = uuid.uuid4()
+        new_session = ChatSession(
+            id=session_id,
+            created_datetime=datetime.utcnow(),
+            title=session_data.title,
+            user_id=current_user.id
+        )
+        
+        db.add(new_session)
+        db.commit()
+        db.refresh(new_session)
+        
+        return {
+            "id": str(new_session.id),
+            "title": new_session.title,
+            "created_datetime": new_session.created_datetime.isoformat(),
+            "message_count": 0
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error creating chat session")
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while creating chat session: {str(e)}"
+        )
+
+@router.put("/chat-sessions/{session_id}")
+def update_chat_session(
+    session_id: UUID,
+    session_data: ChatSessionUpdate,
+    current_user: PyUser = Depends(get_current_user),
+    db: Any = Depends(get_db)
+):
+    """Update a chat session title."""
+    try:
+        # Find the session
+        session = db.query(ChatSession).filter(
+            and_(
+                ChatSession.id == session_id,
+                ChatSession.user_id == current_user.id
+            )
+        ).first()
+        
+        if not session:
+            raise HTTPException(status_code=404, detail="Chat session not found")
+        
+        # Update the session
+        if session_data.title:
+            session.title = session_data.title
+        
+        session.updated_datetime = datetime.utcnow()
+        
+        db.commit()
+        db.refresh(session)
+        
+        return {
+            "id": str(session.id),
+            "title": session.title,
+            "created_datetime": session.created_datetime.isoformat(),
+            "updated_datetime": session.updated_datetime.isoformat() if session.updated_datetime else None
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error updating chat session")
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while updating chat session: {str(e)}"
+        )
+
+@router.delete("/chat-sessions/{session_id}")
+def delete_chat_session(
+    session_id: UUID,
+    current_user: PyUser = Depends(get_current_user),
+    db: Any = Depends(get_db)
+):
+    """Delete a chat session and all its messages."""
+    try:
+        # Find the session
+        session = db.query(ChatSession).filter(
+            and_(
+                ChatSession.id == session_id,
+                ChatSession.user_id == current_user.id
+            )
+        ).first()
+        
+        if not session:
+            raise HTTPException(status_code=404, detail="Chat session not found")
+        
+        # First, set chat_session_id to NULL for all associated audit logs
+        db.query(AuditLog).filter(AuditLog.chat_session_id == session_id).update(
+            {AuditLog.chat_session_id: None}
+        )
+        
+        # Then delete the session
+        db.delete(session)
+        db.commit()
+        
+        return {"message": "Chat session deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error deleting chat session")
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while deleting chat session: {str(e)}"
         )

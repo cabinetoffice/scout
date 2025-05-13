@@ -396,3 +396,27 @@ class AuditLogCreate(BaseModel):
 
 class AuditLog(AuditLogBase):
     user: Optional[UserBase] = None
+    
+class ChatSessionBase(BaseModel):
+    # Allows pydantic/sqlalchemy to use ORM to pull out related objects instead of just references to them
+    model_config = global_model_config
+    
+    id: UUID
+    created_datetime: datetime
+    updated_datetime: Optional[datetime]
+    title: str
+    
+
+class ChatSessionCreate(BaseModel):
+    title: str
+    user_id: UUID
+
+    
+class ChatSession(ChatSessionBase):
+    user: Optional[UserBase] = None
+    audit_logs: Optional[List[AuditLogBase]] = Field(default_factory=list)
+
+class ChatSessionUpdate(BaseModel):
+    id: UUID
+    title: Optional[str] = None
+    updated_datetime: Optional[datetime] = None

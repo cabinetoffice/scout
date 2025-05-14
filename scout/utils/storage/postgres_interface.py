@@ -175,8 +175,8 @@ def get_by_id(
 
 
 def get_or_create_item(
-    model: CriterionCreate | ChunkCreate | FileCreate | ProjectCreate | ResultCreate | UserCreate | RatingCreate,
-) -> PyProject | PyResult | PyUser | PyChunk | PyFile | PyCriterion | PyRating:
+    model: CriterionCreate | ChunkCreate | FileCreate | ProjectCreate | ResultCreate | UserCreate | RatingCreate | AuditLogCreate,
+) -> PyProject | PyResult | PyUser | PyChunk | PyFile | PyCriterion | PyRating | PyAuditLog:
     model_type = type(model)
     with SessionManager() as db:
         try:
@@ -464,7 +464,8 @@ def _get_or_create_auditlog(model: AuditLogCreate, db: Session):
         action_type=model.action_type,
         details=details,
         ip_address=model.ip_address,
-        user_agent=model.user_agent
+        user_agent=model.user_agent,
+        chat_session_id=model.chat_session_id
     )
     
     try:

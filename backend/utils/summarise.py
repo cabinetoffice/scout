@@ -2,18 +2,6 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 
-# It's good practice to handle downloads more gracefully for reuse
-# This ensures they are downloaded only if not already present.
-try:
-    nltk.data.find('tokenizers/punkt')
-except nltk.downloader.DownloadError:
-    nltk.download('punkt', quiet=True)
-try:
-    nltk.data.find('corpora/stopwords')
-except nltk.downloader.DownloadError:
-    nltk.download('stopwords', quiet=True)
-
-
 def get_most_important_words(text, num_important_words=3):
     """
     Identifies the most important words in a text based on frequency,

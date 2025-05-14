@@ -45,8 +45,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json(data);
   } catch (error) {
     console.error('Error handling chat sessions:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return res.status(500).json({ 
-      error: `Failed to handle chat sessions request: ${error.message}` 
+      error: `Failed to handle chat sessions request: ${errorMessage}` 
     });
   }
 }

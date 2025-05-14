@@ -26,6 +26,9 @@ RUN poetry config virtualenvs.create false
 ENV POETRY_REQUESTS_TIMEOUT=60
 RUN poetry install --no-cache --without dev --no-root --no-interaction --no-ansi -vvv
 
+# Download NLTK data during build
+RUN python -m nltk.downloader -d /usr/local/share/nltk_data punkt stopwords
+
 # Copy the FastAPI application code
 COPY backend backend
 COPY scout scout

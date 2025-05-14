@@ -24,6 +24,7 @@ from pydantic import BaseModel
 
 from backend.utils.associate_user_project_request import AssociateUserToProjectRequest
 from backend.utils.associate_user_role_request import AssociateUserToRoleRequest
+from backend.utils.custom_query_request import CustomQueryRequest
 from backend.utils.filters import Filters
 from backend.utils.rating_request import RatingRequest
 from scout.DataIngest.models.schemas import (
@@ -491,10 +492,15 @@ def get_all_projects(
 
 @router.post("/custom-query")
 async def custom_query(
-    query: str,
+    request_data: CustomQueryRequest,  # Changed from individual parameters to request body
     current_user: PyUser = Depends(get_current_user),
-    request: Request = None,
+    db: Any = Depends(get_db),
+    request: Request = None
 ):
+    """Handle custom query with optional chat_session_id."""
+    if request_data.chat_session_id:
+        print(f"Processing query for chat session: {request_data.chat_session_id}")
+
     model_id = os.getenv("AWS_BEDROCK_MODEL_ID")
 
     user_projects = current_user.projects
@@ -509,7 +515,7 @@ async def custom_query(
     client = boto3.client('lambda')
 
     payload = {
-        "query": str(query),
+        "query": str(request_data.query),
         "modelId": str(model_id),
         "knowledgeBaseId": str(knowledge_id)
     }
@@ -533,10 +539,12 @@ async def custom_query(
                 request=request,
                 user_id=current_user.id,
                 project_name=user_projects[0].name,
-                query=query,
+                query=request_data.query,
+                db=db,
+                chat_session_id=request_data.chat_session_id,
                 response=response_payload
             ))
-        
+
         return response_payload
     except ClientError as e:
         logger.error(f"An error occurred while invoking the Lambda function: {e}")

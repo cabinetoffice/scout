@@ -210,21 +210,21 @@ export const createUser = async (createUserRequest: CreateUserRequest): Promise<
     }
     return response.json();
 };
-export const submitQuery = async (query: string): Promise<any> => {
-    const response = await fetch(`/api/custom-query`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ query }),
-    });
-  
-    if (!response.ok) {
-      throw new Error("Failed to submit query");
-    }
-  
-    return response.json();
-  };
+export const submitQuery = async (query: string, chat_session_id?: string): Promise<any> => {
+  const response = await fetch(`/api/custom-query`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query, chat_session_id }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to submit query");
+  }
+
+  return response.json();
+};
 
   export const fetchFilesAsAdmin = async () => {
     try {

@@ -202,7 +202,7 @@ const CustomQuery = () => {
         setSessions(prev => [newSession, ...prev]);
       }
 
-      const data = await submitQuery(message);
+      const data = await submitQuery(message, activeSessionId ?? undefined);
       const botMessage = { 
         text: JSON.parse(data.body).response, 
         isUser: false, 
@@ -294,16 +294,30 @@ const CustomQuery = () => {
           borderBottom: '1px solid rgba(0, 0, 0, 0.12)'
         }}>
           <Typography variant="h6">Chat Sessions</Typography>
-          <IconButton 
+          <IconButton
             onClick={async () => {
               try {
+                // Check if a "New Chat" session with 0 messages already exists
+                const existingNewChatSession = sessions.find(
+                  (session) => session.title === "New Chat" && session.message_count === 0
+                );
+
+                if (existingNewChatSession) {
+                  // If such a session exists, set it as the active session
+                  setActiveSessionId(existingNewChatSession.id);
+                  setMessages([]); // Clear messages
+                  setInput(""); // Clear input
+                  return;
+                }
+
+                // Otherwise, create a new session
                 const newSession = await createChatSession("New Chat");
-                setMessages([]); // Clear messages first
+                setSessions((prev) => [newSession, ...prev]);
+                setActiveSessionId(newSession.id); // Set new session as active
+                setMessages([]); // Clear messages
                 setInput(""); // Clear input
-                setSessions(prev => [newSession, ...prev]);
-                setActiveSessionId(newSession.id); // Set new session as active last
               } catch (error) {
-                console.error('Failed to create new session:', error);
+                console.error("Failed to create new session:", error);
               }
             }}
             color="primary"

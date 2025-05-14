@@ -392,6 +392,7 @@ class AuditLogCreate(BaseModel):
     details: Optional[dict] = None
     ip_address: Optional[str] = None
     user_agent: Optional[str] = None
+    chat_session_id: Optional[UUID] = None
 
 
 class AuditLog(AuditLogBase):
@@ -409,7 +410,6 @@ class ChatSessionBase(BaseModel):
 
 class ChatSessionCreate(BaseModel):
     title: str
-    user_id: UUID
 
     
 class ChatSession(ChatSessionBase):

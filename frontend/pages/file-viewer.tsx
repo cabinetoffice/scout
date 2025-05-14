@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { fetchItems, fetchReadItemsByAttribute, fetchFile } from "@/utils/api";
 import { useRouter } from "next/router";
 import { Tabs, Tab, Box } from "@mui/material";
+import ReactMarkdown from 'react-markdown';
 
 interface File {
   name: string | null;
@@ -139,17 +140,35 @@ const FileViewer: React.FC = () => {
           </Box>
         </div>
         {isLoading ? (
-          <div>Loading...</div>
+          <div className="flex justify-center items-center p-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gray-600"></div>
+          </div>
         ) : error ? (
-          <div className="text-red-500">{error}</div>
+          <div className="text-red-500 p-4 bg-red-50 border border-red-200 rounded-lg mx-6">
+            {error}
+          </div>
         ) : activeTab === "summary" ? (
-          <div className="summary">
+          <div className="p-6">
             {summaryData ? (
-              <pre className="bg-gray-100 p-4 rounded text-wrap-auto text-align-justify">
-                {JSON.stringify(summaryData, null, 2)}
-              </pre>
+              <div className="bg-white shadow-sm rounded-lg border border-gray-200">
+                <div className="px-6 py-5 text-left">
+                  <div className="markdown-content">
+                    {typeof summaryData === 'string' ? (
+                      <ReactMarkdown>{summaryData}</ReactMarkdown>
+                    ) : (
+                      <pre className="bg-gray-50 p-4 rounded-md text-sm text-gray-700 overflow-auto">
+                        {JSON.stringify(summaryData, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                </div>
+              </div>
             ) : (
-              <div>No summary available</div>
+              <div className="bg-gray-50 rounded-lg border border-gray-200 p-8 text-center">
+                <div className="text-gray-400 mb-2">
+                  <p className="text-gray-500 text-base">No summary available</p>
+                </div>
+              </div>
             )}
           </div>
         ) : selectedFile ? (

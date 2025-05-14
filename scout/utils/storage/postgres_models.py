@@ -82,6 +82,8 @@ class User(Base):
 
     audit_logs = relationship("AuditLog", back_populates="user", cascade="all, delete-orphan")
 
+    chat_sessions = relationship("ChatSession", back_populates="user")
+
 
 class CriterionGate(enum.Enum):
     GATE_0 = "GATE_0"
@@ -223,3 +225,20 @@ class AuditLog(Base):
 
     # Relationships
     user = relationship("User", back_populates="audit_logs")
+    chat_session_id = Column(UUID, ForeignKey("chat_session.id"))
+    chat_session = relationship("ChatSession", back_populates="audit_logs")
+
+
+class ChatSession(Base):
+    __tablename__ = "chat_session"
+    
+    id = Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
+    created_datetime = Column(DateTime(timezone=True), server_default=func.now())
+    updated_datetime = Column(DateTime(timezone=True), onupdate=func.now())
+    title = Column(String, nullable=False)
+    user_id = Column(UUID, ForeignKey("user.id"))
+    deleted = Column(Boolean, default=False, nullable=False)
+    
+    # Relationships
+    user = relationship("User", back_populates="chat_sessions")
+    audit_logs = relationship("AuditLog", back_populates="chat_session")

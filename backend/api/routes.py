@@ -1115,10 +1115,13 @@ def get_chat_sessions(
 ):
     """Get all chat sessions for the current user."""
     try:
-        # Query all chat sessions for the current user
+        # Query all non-deleted chat sessions for the current user
         query = (
             select(ChatSession)
-            .where(ChatSession.user_id == current_user.id)
+            .where(and_(
+                ChatSession.user_id == current_user.id,
+                ChatSession.deleted == False
+            ))
             .order_by(ChatSession.updated_datetime.desc())
         )
         
@@ -1207,7 +1210,8 @@ def update_chat_session(
         session = db.query(ChatSession).filter(
             and_(
                 ChatSession.id == session_id,
-                ChatSession.user_id == current_user.id
+                ChatSession.user_id == current_user.id,
+                ChatSession.deleted == False
             )
         ).first()
         
@@ -1217,6 +1221,8 @@ def update_chat_session(
         # Update the session
         if session_data.title:
             session.title = session_data.title
+        if session_data.deleted is not None:
+            session.deleted = session_data.deleted
         
         session.updated_datetime = datetime.utcnow()
         
@@ -1227,7 +1233,8 @@ def update_chat_session(
             "id": str(session.id),
             "title": session.title,
             "created_datetime": session.created_datetime.isoformat(),
-            "updated_datetime": session.updated_datetime.isoformat() if session.updated_datetime else None
+            "updated_datetime": session.updated_datetime.isoformat() if session.updated_datetime else None,
+            "deleted": session.deleted
         }
         
     except HTTPException:
@@ -1246,7 +1253,7 @@ def delete_chat_session(
     current_user: PyUser = Depends(get_current_user),
     db: Any = Depends(get_db)
 ):
-    """Delete a chat session and all its messages."""
+    """Soft delete a chat session by marking it as deleted."""
     try:
         # Find the session
         session = db.query(ChatSession).filter(
@@ -1259,13 +1266,9 @@ def delete_chat_session(
         if not session:
             raise HTTPException(status_code=404, detail="Chat session not found")
         
-        # First, set chat_session_id to NULL for all associated audit logs
-        db.query(AuditLog).filter(AuditLog.chat_session_id == session_id).update(
-            {AuditLog.chat_session_id: None}
-        )
-        
-        # Then delete the session
-        db.delete(session)
+        # Soft delete the session
+        session.deleted = True
+        session.updated_datetime = datetime.utcnow()
         db.commit()
         
         return {"message": "Chat session deleted successfully"}

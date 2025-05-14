@@ -237,6 +237,7 @@ class ChatSession(Base):
     updated_datetime = Column(DateTime(timezone=True), onupdate=func.now())
     title = Column(String, nullable=False)
     user_id = Column(UUID, ForeignKey("user.id"))
+    deleted = Column(Boolean, default=False, nullable=False)
     
     # Relationships
     user = relationship("User", back_populates="chat_sessions")

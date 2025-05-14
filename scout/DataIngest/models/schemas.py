@@ -406,6 +406,7 @@ class ChatSessionBase(BaseModel):
     created_datetime: datetime
     updated_datetime: Optional[datetime]
     title: str
+    deleted: bool = False
     
 
 class ChatSessionCreate(BaseModel):
@@ -420,3 +421,4 @@ class ChatSessionUpdate(BaseModel):
     id: UUID
     title: Optional[str] = None
     updated_datetime: Optional[datetime] = None
+    deleted: Optional[bool] = None

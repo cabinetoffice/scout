@@ -2,7 +2,12 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { filterHeaderForAWSValues } from '@/utils/header';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { method, headers, body, query } = req;
+  const { method, headers, query } = req;
+  const sessionId = query.sessionId as string;
+
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Session ID is required' });
+  }
 
   try {
     const oidcData = headers?.['x-amzn-oidc-data'];
@@ -11,7 +16,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       : oidcData || '';
 
     const requestInit: RequestInit = {
-      method: method,  // Use the actual method (GET/POST/PUT/DELETE)
+      method: method,
       headers: {
         "Authorization": `Bearer ${headers?.['x-amzn-oidc-data']}`,
         ...filterHeaderForAWSValues(headers),
@@ -21,32 +26,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       credentials: "include"
     };
 
-    // Add body for POST/PUT requests
-    if (method === 'POST' || method === 'PUT') {
-      requestInit.body = JSON.stringify(body);
-    }
-
-    let url = `${process.env.BACKEND_HOST}/api/chat-sessions`;
-    
-    // Add session ID to URL for PUT and DELETE methods
-    if ((method === 'PUT' || method === 'DELETE') && query.sessionId) {
-      url += `/${query.sessionId}`;
-    }
+    const url = `${process.env.BACKEND_HOST}/api/chat-sessions/${sessionId}`;
+    console.log(`Forwarding ${method} request to: ${url}`);
 
     const response = await fetch(url, requestInit);
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Error response from backend:', errorText);
-      throw new Error(`Failed to ${method?.toLowerCase()} chat sessions`);
+      throw new Error(`Failed to ${method?.toLowerCase()} chat session`);
     }
 
     const data = await response.json();
     return res.status(200).json(data);
   } catch (error) {
-    console.error('Error handling chat sessions:', error);
+    console.error('Error handling chat session request:', error);
     return res.status(500).json({ 
-      error: `Failed to handle chat sessions request: ${error.message}` 
+      error: `Failed to handle chat session request: ${error.message}` 
     });
   }
 }

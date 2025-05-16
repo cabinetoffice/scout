@@ -17,7 +17,17 @@
     animation: App-logo-spin infinite 20s linear;
   }
 }
+.logo-container {
+  display: flex;
+  justify-content: center;
+  padding: 20px 0;
+  width: 100%;
+}
 
+.header-logo {
+  max-width: 90%;
+  height: auto;
+}
 /* Header */
 .App-header {
   background-color: #3569a9;

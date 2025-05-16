@@ -192,7 +192,13 @@ export default function MyApp({ Component, pageProps }: AppProps) {
           style={{ width: "15%", height: "100vh" }}
         >
           <div className="header-content">
-            <h1>🔎 NISTA Scout</h1>
+            <div className="logo-container">
+              <img 
+                src="/assets/nista_scout_logo.png" 
+                alt="NISTA Scout Logo" 
+                className="header-logo"
+              />
+            </div>
             
             {projectInfo && (
               <div className="project-indicator">

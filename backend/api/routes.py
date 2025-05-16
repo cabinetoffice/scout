@@ -1156,13 +1156,21 @@ def get_chat_sessions(
     current_user: PyUser = Depends(get_current_user),
     db: Any = Depends(get_db)
 ):
-    """Get all chat sessions for the current user."""
+    """Get all chat sessions for the current user in their current project."""
     try:
-        # Query all non-deleted chat sessions for the current user
+        # Check if user has any projects
+        if not current_user.projects:
+            return []
+            
+        # Get the current project ID
+        current_project_id = current_user.projects[0].id
+        
+        # Query all non-deleted chat sessions for the current user in the current project
         query = (
             select(ChatSession)
             .where(and_(
                 ChatSession.user_id == current_user.id,
+                ChatSession.project_id == current_project_id,
                 ChatSession.deleted == False
             ))
             .order_by(ChatSession.updated_datetime.desc())
@@ -1192,7 +1200,8 @@ def get_chat_sessions(
                 "title": session.title,
                 "created_datetime": session.created_datetime.isoformat(),
                 "updated_datetime": session.updated_datetime.isoformat() if session.updated_datetime else None,
-                "message_count": message_count
+                "message_count": message_count,
+                "project_id": str(session.project_id) if session.project_id else None
             })
             
         return sessions
@@ -1212,13 +1221,18 @@ def create_chat_session(
 ):
     """Create a new chat session."""
     try:
+        # Check if user has a project
+        if not current_user.projects:
+            raise HTTPException(status_code=400, detail="User has no projects")
+            
         # Create a new session
         session_id = uuid.uuid4()
         new_session = ChatSession(
             id=session_id,
             created_datetime=datetime.utcnow(),
             title=session_data.title,
-            user_id=current_user.id
+            user_id=current_user.id,
+            project_id=current_user.projects[0].id
         )
         
         db.add(new_session)

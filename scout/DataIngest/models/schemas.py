@@ -407,6 +407,7 @@ class ChatSessionBase(BaseModel):
     updated_datetime: Optional[datetime]
     title: str
     deleted: bool = False
+    project_id: UUID
     
 
 class ChatSessionCreate(BaseModel):

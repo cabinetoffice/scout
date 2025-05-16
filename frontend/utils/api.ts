@@ -109,6 +109,49 @@ export const fetchFile = async (
   return { url, fileType };
 };
 
+export const fetchFilebyKey = async (
+  key: string
+): Promise<{ url: string; fileType: string }> => {
+  const response = await fetch(`/api/get_items_by_key/${key}`);
+  if (!response.ok) throw new Error("Failed to fetch file");
+
+  const fileType =
+    response.headers.get("Content-Type") || "application/octet-stream";
+
+  // Create a new ReadableStream from the response body
+  const reader = response.body?.getReader();
+  const stream = new ReadableStream({
+    start(controller) {
+      return pump();
+      function pump(): Promise<void> {
+        return (
+          reader?.read().then(({ done, value }) => {
+            if (done) {
+              controller.close();
+              return;
+            }
+            controller.enqueue(value);
+            return pump();
+          }) || Promise.resolve()
+        );
+      }
+    },
+  });
+
+  // Create a new response with the stream
+  const newResponse = new Response(stream);
+
+  // Get the blob from the new response
+  const blob = await newResponse.blob();
+
+  const pdf_blob = blob.slice(0, blob.size, "application/pdf");
+
+  // Create a URL for the blob
+  const url = URL.createObjectURL(pdf_blob);
+
+  return { url, fileType };
+};
+
 interface RatingRequest {
   result_id: string;
   good_response: boolean;
@@ -147,6 +190,22 @@ export const fetchAdminUsers = async () => {
     console.error("Error fetching admin users:", error);
     return null;
 }
+};
+
+export const fetchUserRole = async () => {
+  try {
+    const response = await fetch("/api/user/role");
+    if (!response.ok) {
+      if (response.status === 401) {
+        return null;
+      }
+      throw new Error("Failed to fetch user role");
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching user role:", error);
+    return null;
+  }
 };
 
 export const fetchProjectsAsAdmin = async () => {

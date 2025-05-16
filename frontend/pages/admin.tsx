@@ -44,7 +44,7 @@ interface User {
   projects?: Project[];
 }
 
-export default function AdminPage() {
+export default function AdminPage({ refreshProjectInfo }: { refreshProjectInfo: () => void }) {
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,7 +101,6 @@ export default function AdminPage() {
     const fetchAllProjects = async () => {
       try {
         const projects = await fetchProjectsAsAdmin();
-        console.log("All projects:", projects);
         setAllProjects(projects);
       } catch (error) {
         console.error("Error fetching all projects:", error);
@@ -204,6 +203,10 @@ export default function AdminPage() {
       }
     }
 
+    if (typeof refreshProjectInfo === "function") {
+      await refreshProjectInfo();
+    }
+
     setShowForm(false);
     setEditingIndex(null);
     setFormUser({
@@ -295,6 +298,7 @@ export default function AdminPage() {
           params.value?.name || "No role"
         );
       },
+      valueFormatter: (params) => params.value?.name || "No role",
     },
     {
       headerName: "Projects",
@@ -305,6 +309,10 @@ export default function AdminPage() {
       cellRenderer: projectsFormatter,
       cellStyle: { textAlign: "center" },
       headerClass: "center-header",
+      valueFormatter: (params) =>
+        Array.isArray(params.value)
+          ? params.value.map((p: Project) => p.name).join(", ")
+          : params.value?.name || "No projects",
     },
     {
       headerName: "Actions",
@@ -337,21 +345,55 @@ export default function AdminPage() {
     },
   ];
 
-  const handleProjectToggle = (project: Project) => {
-    setFormUser((prev) => {
-      const isProjectSelected = prev.projects?.some((p) => p.id === project.id);
-      if (isProjectSelected) {
-        return {
-          ...prev,
-          projects: prev.projects?.filter((p) => p.id !== project.id),
-        };
-      } else {
-        return {
-          ...prev,
-          projects: [...(prev.projects || []), project],
-        };
-      }
-    });
+  const ProjectSelector = ({
+    selectedProject,
+    allProjects,
+    onProjectSelect,
+  }: {
+    selectedProject: Project | null;
+    allProjects: Project[];
+    onProjectSelect: (project: Project | null) => void;
+  }) => (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "16px" }}>
+      {allProjects.map((project) => (
+        <Chip
+          key={project.id}
+          label={project.name}
+          onClick={() => {
+            // Toggle between selecting this project or none
+            if (selectedProject?.id === project.id) {
+              onProjectSelect(null);
+            } else {
+              onProjectSelect(project);
+            }
+          }}
+          variant={selectedProject?.id === project.id ? "filled" : "outlined"}
+          style={{
+            backgroundColor: selectedProject?.id === project.id ? "lightblue" : "lightgrey",
+            cursor: "pointer",
+          }}
+        />
+      ))}
+      {allProjects.length > 0 && (
+        <Chip
+          label="None"
+          onClick={() => onProjectSelect(null)}
+          variant={selectedProject === null ? "filled" : "outlined"}
+          style={{
+            backgroundColor: selectedProject === null ? "#f5f5f5" : "transparent",
+            border: "1px dashed #aaa",
+            cursor: "pointer",
+          }}
+        />
+      )}
+    </div>
+  );
+
+  const handleProjectSelect = (project: Project | null) => {
+    setFormUser((prev) => ({
+      ...prev,
+      projects: project ? [project] : [],
+    }));
   };
 
   const menuItems = [
@@ -452,29 +494,12 @@ export default function AdminPage() {
               }
             />
 
-            <label style={formLabelStyle}>Projects</label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
-              {allProjects.map((project) => (
-                <Chip
-                  key={project.id}
-                  label={project.name}
-                  variant={
-                    formUser.projects?.some((p) => p.id === project.id)
-                      ? "filled"
-                      : "outlined"
-                  }
-                  onClick={() => handleProjectToggle(project)}
-                  style={{
-                    backgroundColor: formUser.projects?.some(
-                      (p) => p.id === project.id
-                    )
-                      ? "lightblue"
-                      : "lightgrey",
-                    cursor: "pointer",
-                  }}
-                />
-              ))}
-            </div>
+            <label style={formLabelStyle}>Project</label>  {/* Changed from "Projects" to "Project" */}
+            <ProjectSelector
+              selectedProject={formUser.projects && formUser.projects.length > 0 ? formUser.projects[0] : null}
+              allProjects={allProjects}
+              onProjectSelect={handleProjectSelect}
+            />
 
             <div
               style={{

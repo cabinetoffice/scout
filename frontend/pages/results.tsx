@@ -6,7 +6,7 @@ import { useRouter } from "next/router";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
 import styles from "../public/styles/Results.module.css";
-import { ColDef, ICellRendererParams } from "ag-grid-community";
+import { ColDef, ICellRendererParams, ValueFormatterParams } from "ag-grid-community";
 import { Modal, Typography, IconButton, Chip } from "@mui/material";
 import {
   Close as CloseIcon,
@@ -446,6 +446,7 @@ const ResultsTable: React.FC = () => {
       autoHeight: true,
       flex: 5,
       cellRenderer: (params: ICellRendererParams) => params.value.question,
+      valueFormatter: (params: ValueFormatterParams) => params.value?.question || "",
       cellStyle: { textAlign: "left" },
       headerClass: "center-header",
     },
@@ -523,7 +524,9 @@ const ResultsTable: React.FC = () => {
         aria-labelledby="modal-modal-title"
         aria-describedby="modal-modal-description"
       >
-        <ModalContent />
+        <div>
+          <ModalContent />
+        </div>
       </Modal>
     </div>
   );

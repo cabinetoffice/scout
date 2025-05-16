@@ -6,7 +6,7 @@ import "../public/styles/App.css";
 import "../public/styles/index.css";
 import "../public/styles/FileViewer.css";
 import "../public/styles/CustomQuery.css";
-import { fetchUser, logoutUser, fetchAdminUsers } from "../utils/api";
+import { fetchUser, logoutUser, fetchUserRole } from "../utils/api";
 
 interface User {
   email: string;
@@ -32,37 +32,44 @@ export default function MyApp({ Component, pageProps }: AppProps) {
   const documentsMenuRef = useRef<HTMLDivElement>(null); // Ref for Documents menu item
   const documentsSubmenuRef = useRef<HTMLDivElement>(null); // Ref for Documents submenu
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminUsers, setAdminUsers] = useState<User[]>([]);
+  const [isUploader, setIsUploader] = useState(false);
+  const [projectInfo, setProjectInfo] = useState<any>(null);
 
   useEffect(() => {
     const getUserDetails = async () => {
-      setLoading(true); // Start loading
+      setLoading(true);
       try {
         const userData = await fetchUser();
         setUser(userData);
-        if (userData) {
-          // Only fetch admin users if user is logged in
-          const adminList = await fetchAdminUsers();
-          setAdminUsers(adminList);
 
-          const match = adminList.find(
-            (adminUser: AdminUser) =>
-              adminUser.email === userData?.email &&
-              adminUser.role.name === "ADMIN"
-          );
-          setIsAdmin(!!match);
+        if (userData) {
+          // Get user role directly from the new endpoint
+          const roleData = await fetchUserRole();
+          if (roleData) {
+            setIsAdmin(roleData.role === "ADMIN");
+            setIsUploader(roleData.role === "UPLOADER");
+            setProjectInfo(roleData.project);
+          } else {
+            setIsAdmin(false);
+            setIsUploader(false);
+            setProjectInfo(null);
+          }
         } else {
-          setIsAdmin(false); // Not admin if not logged in
+          setIsAdmin(false);
+          setIsUploader(false);
+          setProjectInfo(null);
         }
       } catch (error) {
-        console.error("Error fetching user or admin users:", error);
+        console.error("Error fetching user or role:", error);
         setIsAdmin(false);
+        setIsUploader(false);
+        setProjectInfo(null);
       } finally {
         setLoading(false);
       }
     };
     getUserDetails();
-  }, []); // Fetch user details only once on mount
+  }, []);
 
   useEffect(() => {
     // Add click outside listener to close menus
@@ -144,6 +151,33 @@ export default function MyApp({ Component, pageProps }: AppProps) {
   // Define paths for the Documents section
   const documentPaths = ["/file-viewer", "/files-upload"];
 
+  // Add role-based access control
+  const restrictedPaths = {
+    uploader: ["/files-upload"],
+    admin: ["/admin", "/files-upload", "/audit-logs"],
+  };
+
+  useEffect(() => {
+    if (!loading) {
+      const currentPath = router.pathname;
+      if (isUploader && !restrictedPaths.uploader.includes(currentPath)) {
+        router.push("/files-upload");
+      }
+    }
+  }, [loading, isUploader, router.pathname]);
+
+  useEffect(() => {
+  }, [router.pathname, isAdmin, isUploader]);
+
+  const refreshProjectInfo = async () => {
+    const roleData = await fetchUserRole();
+    if (roleData) {
+      setProjectInfo(roleData.project);
+      setIsAdmin(roleData.role === "ADMIN");
+      setIsUploader(roleData.role === "UPLOADER");
+    }
+  };
+
   return (
     <div className="App">
       <div
@@ -158,7 +192,23 @@ export default function MyApp({ Component, pageProps }: AppProps) {
           style={{ width: "15%", height: "100vh" }}
         >
           <div className="header-content">
-            <h1>🔎 NISTA Scout</h1>
+            <div className="logo-container">
+              <img 
+                src="/assets/nista_scout_logo.png" 
+                alt="NISTA Scout Logo" 
+                className="header-logo"
+              />
+            </div>
+            
+            {projectInfo && (
+              <div className="project-indicator">
+                <h2 className="project-name-header">Project</h2>
+                <div className="project-name-badge">
+                  {projectInfo.name}
+                </div>
+              </div>
+            )}
+            
             <nav
               className="header-nav"
               style={{
@@ -170,13 +220,16 @@ export default function MyApp({ Component, pageProps }: AppProps) {
               }}
             >
               {/* Summary Link */}
+              {!isUploader && (
               <Link href="/" passHref legacyBehavior>
                 <a className={`nav-link ${isActive("/") ? "active" : ""}`}>
                   Summary
                 </a>
               </Link>
+              )}
 
               {/* Results Link */}
+              {!isUploader && (
               <Link href="/results" passHref legacyBehavior>
                 <a
                   className={`nav-link ${isActive("/results") ? "active" : ""}`}
@@ -184,7 +237,9 @@ export default function MyApp({ Component, pageProps }: AppProps) {
                   Results
                 </a>
               </Link>
+              )}
 
+              {/* Audit Logs Link */}
               {/* Documents Dropdown */}
               <div className="nav-item-container" ref={documentsMenuRef}>
                 <a
@@ -198,6 +253,7 @@ export default function MyApp({ Component, pageProps }: AppProps) {
                 </a>
                 {showDocumentsSubmenu && (
                   <div className="submenu" ref={documentsSubmenuRef}>
+                  {(!isUploader) && (
                     <Link href="/file-viewer" passHref legacyBehavior>
                       <a
                         className={`submenu-link ${
@@ -207,8 +263,9 @@ export default function MyApp({ Component, pageProps }: AppProps) {
                         Viewer
                       </a>
                     </Link>
+                    )}
                     {/* Conditionally render File Browser link based on isAdmin status */}
-                    {isAdmin && (
+                    {(isAdmin || isUploader) && (
                       <Link href="/files-upload" passHref legacyBehavior>
                         <a
                           className={`submenu-link ${
@@ -224,6 +281,7 @@ export default function MyApp({ Component, pageProps }: AppProps) {
               </div>
 
               {/* Custom Query Link */}
+              {!isUploader && (
               <Link href="/custom-query" passHref legacyBehavior>
                 <a
                   className={`nav-link ${
@@ -233,6 +291,7 @@ export default function MyApp({ Component, pageProps }: AppProps) {
                   Custom Query
                 </a>
               </Link>
+              )}
 
               {/* Admin Link */}
               {isAdmin && (
@@ -297,7 +356,13 @@ export default function MyApp({ Component, pageProps }: AppProps) {
           </div>
         </header>
         <main className="main-content" style={{ width: "80%" }}>
-          <Component {...pageProps} adminUsers={adminUsers} />
+          <Component 
+            {...pageProps} 
+            isAdmin={isAdmin} 
+            isUploader={isUploader}
+            projectInfo={projectInfo} 
+            refreshProjectInfo={refreshProjectInfo}
+          />
         </main>
       </div>
       <footer className="App-footer">

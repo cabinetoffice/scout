@@ -8,8 +8,9 @@ import {
   fetchFilesAsAdmin,
   uploadFilesToS3,
   deleteFileFromS3,
-  getSignedFileUrl,
+  fetchFilebyKey,
 } from "@/utils/api";
+import { useRouter } from "next/router";
 
 interface S3File {
   key: string;
@@ -17,11 +18,31 @@ interface S3File {
   size?: number;
 }
 
-const S3FileUploader: React.FC = () => {
+interface FilesUploadProps {
+  isAdmin: boolean;
+  isUploader: boolean;
+  projectInfo: {
+    id: string;
+    name: string;
+  } | null;
+}
+
+const S3FileUploader: React.FC<FilesUploadProps> = ({ isAdmin, isUploader, projectInfo }) => {
   const [files, setFiles] = useState<S3File[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<{
+    dataUrl: string;
+    fileType: string;
+  } | null>(null);
+  const router = useRouter();
+
+  // Access control: redirect if not admin or uploader
+  useEffect(() => {
+    if (!isAdmin && !isUploader) {
+      router.push("/");
+    }
+  }, [isAdmin, isUploader, router]);
 
   const fetchFiles = async () => {
     try {
@@ -61,7 +82,7 @@ const S3FileUploader: React.FC = () => {
       await uploadFilesToS3(formData);
       alert("Upload successful!");
       setSelectedFiles([]);
-      setPreviewUrl(null);
+      setPreviewFile(null);
       fetchFiles();
     } catch (err) {
       console.error("Upload failed:", err);
@@ -73,11 +94,16 @@ const S3FileUploader: React.FC = () => {
 
   const handlePreview = async (key: string) => {
     try {
-      const url = await getSignedFileUrl(key);
-      setPreviewUrl(url);
+      if (!key.toLowerCase().endsWith(".pdf")) {
+        setPreviewFile(null);
+      }
+      else {
+      const { url, fileType } = await fetchFilebyKey(key);
+      setPreviewFile({ dataUrl: url, fileType });
+      }
     } catch (err) {
-      console.error("Failed to get signed URL:", err);
-      setPreviewUrl(null);
+      console.error("Failed to fetch file for preview:", err);
+      setPreviewFile(null);
     }
   };
 
@@ -132,9 +158,25 @@ const S3FileUploader: React.FC = () => {
     },
   ];
 
+  // Optionally, show nothing or a loading indicator while redirecting
+  if (!isAdmin && !isUploader) {
+    return null;
+  }
+
   return (
     <div style={{ padding: "20px" }}>
       <h2>Upload Project Files</h2>
+      
+      {projectInfo && (
+        <div style={{
+          marginBottom: "20px",
+          padding: "10px",
+          backgroundColor: "#f0f0f0",
+          borderRadius: "5px"
+        }}>
+          <p><strong>Current Project:</strong> {projectInfo.name}</p>
+        </div>
+      )}
 
       <div
         {...getRootProps()}
@@ -172,26 +214,6 @@ const S3FileUploader: React.FC = () => {
         </div>
       )}
 
-      {previewUrl && (
-        <div style={{ marginBottom: "20px" }}>
-          <h4>Preview</h4>
-          {previewUrl.includes(".pdf") ? (
-            <embed
-              src={previewUrl}
-              type="application/pdf"
-              width="100%"
-              height="400px"
-            />
-          ) : (
-            <img
-              src={previewUrl}
-              alt="Preview"
-              style={{ maxWidth: "100%", maxHeight: "400px" }}
-            />
-          )}
-        </div>
-      )}
-
       <h3>Files in Scout</h3>
       <div className="ag-theme-alpine" style={{ height: 400, width: "100%" }}>
         <AgGridReact
@@ -200,6 +222,34 @@ const S3FileUploader: React.FC = () => {
           defaultColDef={{ resizable: true, wrapText: true, autoHeight: true }}
         />
       </div>
+
+
+      {previewFile && (
+        <div style={{ marginBottom: "20px" }}>
+          <h4>Preview</h4>
+          {previewFile.fileType.toLowerCase() === "application/pdf" ? (
+            <iframe
+              src={`${previewFile.dataUrl}#view=FitH&navpanes=0`}
+              width="100%"
+              height="400px"
+              className="border-none"
+              title="PDF Preview"
+            />
+          ) : (
+            <div>
+              <p>This file type cannot be viewed in the browser.</p>
+              <a
+                href={previewFile.dataUrl}
+                download
+                className="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                Download File
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+
     </div>
   );
 };

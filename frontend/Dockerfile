@@ -1,4 +1,4 @@
-FROM node:20.13.1-alpine@sha256:a7b980c958bfe4d84ee9263badd95a40c8bb50ad5afdb87902c187fefaef0e24 AS builder
+FROM public.ecr.aws/docker/library/node:20-bookworm AS builder
 
 WORKDIR /app
 

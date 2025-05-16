@@ -383,6 +383,46 @@ def get_file(
             detail=f"An error occurred while retrieving the file: {str(e)}",
         )
 
+@router.get("/get_file_by_key/{key}")
+def get_file_by_key(
+    key: str,
+    current_user: PyUser = Depends(get_current_user),
+):
+    try:
+        # Find the file in the database by its S3 key
+        file = interface.filter_items(FileFilter(s3_key=key), current_user)
+        if not file or len(file) == 0:
+            raise HTTPException(status_code=404, detail="File not found")
+
+        file = file[0]  # Get the first matching file
+        file_extension = file.s3_key.split(".")[-1].lower()
+
+        # Determine the file type
+        if file_extension == "pdf":
+            file_type = "application/pdf"
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {file_extension}")
+
+        # Fetch the file content from the S3 URL
+        file_response = requests.get(file.url)
+        file_response.raise_for_status()
+        file_content = file_response.content
+
+        return Response(
+            content=file_content,
+            media_type=file_type,
+            headers={
+                "Content-Disposition": f"attachment; filename={file.s3_key.split('/')[-1]}",
+                "X-File-Type": file_type,
+            },
+        )
+
+    except Exception as e:
+        logger.exception("An error occurred while retrieving the file by key")
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while retrieving the file: {str(e)}",
+        )
 
 @router.post("/rate")
 def rate_response(
@@ -604,7 +644,7 @@ def get_all_files(
 
     logger.log(level=logging.INFO, msg=request)
     
-    if not is_admin(current_user):
+    if not (is_admin(current_user) or is_uploader(current_user)):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     try:
@@ -630,6 +670,7 @@ async def upload_files(
     files: List[UploadFile] = File(...),
     current_user: PyUser = Depends(get_current_user),
     s3_client: boto3.client = Depends(get_s3_client),
+    db: Any = Depends(get_db),
     request: Request = None
 ):
     if not (is_admin(current_user) or is_uploader(current_user)):
@@ -670,6 +711,7 @@ async def upload_files(
                     request=request,
                     user_id=current_user.id,
                     operation="upload",
+                    db=db,
                     file_details={
                         "filename": file.filename,
                         "bucket": s3_bucket,
@@ -690,7 +732,7 @@ async def delete_file(
     request: Request = None,
     db: Any = Depends(get_db) 
 ):
-    if not is_admin(current_user):
+    if not (is_admin(current_user) or is_uploader(current_user)):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     if not key:
@@ -732,6 +774,7 @@ async def delete_file(
                 request=request,
                 user_id=current_user.id,
                 operation="delete",
+                db=db,
                 file_details={
                     "filename": key,
                     "bucket": s3_bucket,
@@ -754,7 +797,7 @@ def get_signed_url(key: str = Query(...),
     current_user: PyUser = Depends(get_current_user),
     s3_client: boto3.client = Depends(get_s3_client),):
     
-    if not is_admin(current_user):
+    if not (is_admin(current_user) or is_uploader(current_user)):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     try:
@@ -1282,3 +1325,27 @@ def delete_chat_session(
             status_code=500,
             detail=f"An error occurred while deleting chat session: {str(e)}"
         )
+
+@router.get("/user/role")
+def get_user_role(
+    current_user: PyUser = Depends(get_current_user),
+):
+    """Get the current user's role and project info."""
+    try:
+        # Get project info if available
+        project_info = None
+        if current_user.projects and len(current_user.projects) > 0:
+            project = current_user.projects[0]  # Get first project
+            project_info = {
+                "id": str(project.id),
+                "name": project.name
+            }
+            
+        return {
+            "role": current_user.role.name if current_user.role else None,
+            "user_id": str(current_user.id),
+            "project": project_info
+        }
+    except Exception as e:
+        logger.error(f"Error fetching user role: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching user role: {e}")

@@ -44,7 +44,7 @@ interface User {
   projects?: Project[];
 }
 
-export default function AdminPage() {
+export default function AdminPage({ refreshProjectInfo }: { refreshProjectInfo: () => void }) {
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -201,6 +201,10 @@ export default function AdminPage() {
       } catch (error) {
         console.error("Error updating user:", error);
       }
+    }
+
+    if (typeof refreshProjectInfo === "function") {
+      await refreshProjectInfo();
     }
 
     setShowForm(false);

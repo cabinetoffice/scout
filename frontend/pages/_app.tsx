@@ -169,6 +169,15 @@ export default function MyApp({ Component, pageProps }: AppProps) {
   useEffect(() => {
   }, [router.pathname, isAdmin, isUploader]);
 
+  const refreshProjectInfo = async () => {
+    const roleData = await fetchUserRole();
+    if (roleData) {
+      setProjectInfo(roleData.project);
+      setIsAdmin(roleData.role === "ADMIN");
+      setIsUploader(roleData.role === "UPLOADER");
+    }
+  };
+
   return (
     <div className="App">
       <div
@@ -346,6 +355,7 @@ export default function MyApp({ Component, pageProps }: AppProps) {
             isAdmin={isAdmin} 
             isUploader={isUploader}
             projectInfo={projectInfo} 
+            refreshProjectInfo={refreshProjectInfo}
           />
         </main>
       </div>

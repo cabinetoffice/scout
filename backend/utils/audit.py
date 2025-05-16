@@ -69,12 +69,13 @@ async def log_llm_query(request: Request, user_id: UUID, project_name: str, quer
         chat_session_id=chat_session_id
     )
 
-async def log_file_operation(request: Request, user_id: UUID, operation: str, file_details: dict):
+async def log_file_operation(request: Request, user_id: UUID, operation: str, db: Session, file_details: dict):
     """Log a file operation (upload/delete)."""
     await create_audit_log(
         request,
         user_id,
         f"file_{operation}",
+        db,
         {
             "file": file_details,
             "timestamp": datetime.utcnow().isoformat()

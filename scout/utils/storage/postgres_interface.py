@@ -809,6 +809,8 @@ def _filter_file(model: FileFilter, db: Session, current_user: PyUser) -> list[P
         query = query.filter(SqFile.source.ilike(f"%{model.source}%"))
     if model.project:
         query = query.filter(SqFile.project_id == model.project.id)
+    if model.s3_key:
+        query = query.filter(SqFile.s3_key == model.s3_key)
     if model.chunks:
         chunk_ids = [chunk.id for chunk in model.chunks]
         query = query.join(SqChunk)

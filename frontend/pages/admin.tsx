@@ -101,7 +101,6 @@ export default function AdminPage() {
     const fetchAllProjects = async () => {
       try {
         const projects = await fetchProjectsAsAdmin();
-        console.log("All projects:", projects);
         setAllProjects(projects);
       } catch (error) {
         console.error("Error fetching all projects:", error);
@@ -295,6 +294,7 @@ export default function AdminPage() {
           params.value?.name || "No role"
         );
       },
+      valueFormatter: (params) => params.value?.name || "No role",
     },
     {
       headerName: "Projects",
@@ -305,6 +305,10 @@ export default function AdminPage() {
       cellRenderer: projectsFormatter,
       cellStyle: { textAlign: "center" },
       headerClass: "center-header",
+      valueFormatter: (params) =>
+        Array.isArray(params.value)
+          ? params.value.map((p: Project) => p.name).join(", ")
+          : params.value?.name || "No projects",
     },
     {
       headerName: "Actions",

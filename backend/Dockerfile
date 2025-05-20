@@ -28,6 +28,7 @@ RUN poetry install --no-cache --without dev --no-root --no-interaction --no-ansi
 
 # Download NLTK data during build
 RUN python -m nltk.downloader -d /usr/local/share/nltk_data punkt punkt_tab stopwords
+RUN pip install flashrank
 
 # Copy the FastAPI application code
 COPY backend backend

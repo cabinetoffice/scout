@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import ENUM, UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from scout.utils.storage.postgres_database import Base
+from scout.utils.storage.postgres_models_llm import LLMModel
 
 project_users = Table(
     "project_users",

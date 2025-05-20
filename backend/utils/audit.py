@@ -53,7 +53,7 @@ async def create_audit_log(
         })
         db.commit()
 
-async def log_llm_query(request: Request, user_id: UUID, project_name: str, query: str, db: Session, chat_session_id: UUID, response: dict):
+async def log_llm_query(request: Request, user_id: UUID, project_name: str, query: str, db: Session, chat_session_id: UUID, model_id: str, response: dict):
     """Log an LLM query."""
     await create_audit_log(
         request,
@@ -62,6 +62,7 @@ async def log_llm_query(request: Request, user_id: UUID, project_name: str, quer
         db,
         {
             "project_name": project_name,
+            "model_id": model_id,
             "query": query,
             "response": response,
             "timestamp": datetime.utcnow().isoformat()

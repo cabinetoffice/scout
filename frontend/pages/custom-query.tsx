@@ -22,7 +22,11 @@ import {
   DialogActions,
   Menu,
   MenuItem,
-  Tooltip
+  Tooltip,
+  Select,
+  FormControl,
+  InputLabel,
+  SelectChangeEvent
 } from "@mui/material";
 import { 
   submitQuery, 
@@ -30,13 +34,15 @@ import {
   fetchChatSessions, 
   createChatSession, 
   updateChatSession, 
-  deleteChatSession 
+  deleteChatSession,
+  fetchLLMModels
 } from "@/utils/api";
 import ChatIcon from '@mui/icons-material/Chat';
 import AddIcon from '@mui/icons-material/Add';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import { ModelSelector } from '@/components/ModelSelector';
 
 // Interface for chat sessions
 interface ChatSession {
@@ -56,17 +62,31 @@ interface ChatMessage {
   session_id: string | null;
 }
 
+// Interface for LLM models
+interface LLMModel {
+  id: string;
+  name: string;
+  model_id: string;
+  description: string | null;
+  is_default: boolean;
+}
+
 const CustomQuery = () => {
   const [messages, setMessages] = useState<{ text: string; isUser: boolean; timestamp: string }[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [loadingSessions, setLoadingSessions] = useState(true);
+  const [loadingModels, setLoadingModels] = useState(true);
   
   // Session management
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(true);
+  
+  // Model selection
+  const [models, setModels] = useState<LLMModel[]>([]);
+  const [selectedModelId, setSelectedModelId] = useState<string>("");
   
   // Dialog states
   const [editSessionDialogOpen, setEditSessionDialogOpen] = useState(false);
@@ -93,6 +113,31 @@ const CustomQuery = () => {
     };
 
     loadChatSessions();
+  }, []);
+  
+  // Load available LLM models
+  useEffect(() => {
+    const loadModels = async () => {
+      try {
+        setLoadingModels(true);
+        const modelsData = await fetchLLMModels();
+        setModels(modelsData);
+        
+        // Set default model
+        const defaultModel = modelsData.find((model: LLMModel) => model.is_default);
+        if (defaultModel) {
+          setSelectedModelId(defaultModel.model_id);
+        } else if (modelsData.length > 0) {
+          setSelectedModelId(modelsData[0].model_id);
+        }
+      } catch (error) {
+        console.error('Failed to load LLM models:', error);
+      } finally {
+        setLoadingModels(false);
+      }
+    };
+
+    loadModels();
   }, []);
 
   // Set the active session when sessions are loaded
@@ -202,7 +247,7 @@ const CustomQuery = () => {
         setSessions(prev => [newSession, ...prev]);
       }
 
-      const data = await submitQuery(message, activeSessionId ?? undefined);
+      const data = await submitQuery(message, activeSessionId ?? undefined, selectedModelId);
       const botMessage = { 
         text: JSON.parse(data.body).response, 
         isUser: false, 
@@ -224,6 +269,11 @@ const CustomQuery = () => {
     if (input.trim() === "") return;
     handleSendMessage(input);
     setInput("");
+  };
+  
+  // Handle model selection change
+  const handleModelChange = (event: SelectChangeEvent) => {
+    setSelectedModelId(event.target.value);
   };
 
   // Handle opening the session menu
@@ -448,6 +498,15 @@ const CustomQuery = () => {
             </Box>
           )}
         </Paper>
+
+        {/* Model Selector */}
+        <ModelSelector 
+          models={models}
+          selectedModelId={selectedModelId}
+          handleModelChange={handleModelChange}
+          loading={loading}
+          loadingModels={loadingModels}
+        />
 
         {/* Input Area */}
         <Box sx={{ display: "flex", alignItems: "center" }}>

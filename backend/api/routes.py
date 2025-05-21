@@ -76,6 +76,7 @@ from scout.utils.storage.postgres_models import Project as SqProject
 from scout.utils.storage.postgres_models import Result as SqResult
 from scout.utils.storage.postgres_models import Project as SqProject
 from scout.utils.storage.postgres_models import AuditLog
+from scout.utils.llm_formats import format_llm_request
 
 router = APIRouter()
 
@@ -532,16 +533,16 @@ def get_all_projects(
 
 @router.post("/custom-query")
 async def custom_query(
-    request_data: CustomQueryRequest,  # Changed from individual parameters to request body
+    request_data: CustomQueryRequest,
     current_user: PyUser = Depends(get_current_user),
     db: Any = Depends(get_db),
     request: Request = None
 ):
-    """Handle custom query with optional chat_session_id."""
+    """Handle custom query with optional chat_session_id and model_id."""
     if request_data.chat_session_id:
         print(f"Processing query for chat session: {request_data.chat_session_id}")
 
-    model_id = os.getenv("AWS_BEDROCK_MODEL_ID")
+    model_id = request_data.model_id or os.getenv("AWS_BEDROCK_MODEL_ID")
 
     user_projects = current_user.projects
     if not user_projects:
@@ -554,8 +555,14 @@ async def custom_query(
 
     client = boto3.client('lambda')
 
+    formatted_request = format_llm_request(
+        model_id=model_id,
+        prompt=request_data.query,
+        max_tokens=1000
+    )
+
     payload = {
-        "query": str(request_data.query),
+        "query": str(formatted_request),
         "modelId": str(model_id),
         "knowledgeBaseId": str(knowledge_id)
     }
@@ -582,6 +589,7 @@ async def custom_query(
                 query=request_data.query,
                 db=db,
                 chat_session_id=request_data.chat_session_id,
+                model_id=model_id,
                 response=response_payload
             ))
 
@@ -1096,7 +1104,7 @@ def get_chat_history(
             query = query.where(AuditLog.chat_session_id == session_id)
             
         # Order by timestamp descending
-        query = query.order_by(AuditLog.timestamp.desc())
+        query = query.order_by(AuditLog.timestamp)
         
         # Execute the query
         result = db.execute(query).scalars().all()

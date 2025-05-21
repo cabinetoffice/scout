@@ -10,6 +10,9 @@ from fastapi.security import OAuth2PasswordBearer
 from alembic import command
 from alembic.config import Config
 from backend.api.routes import router as api_router
+from backend.api.s3_routes import router as s3_router
+from backend.api.kb_routes import router as kb_router
+from backend.api.llm_routes import router as llm_router
 from scout.utils.config import Settings
 
 
@@ -55,6 +58,9 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api")
+app.include_router(s3_router)
+app.include_router(kb_router)
+app.include_router(llm_router, prefix="/api/llm")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8080)

@@ -1,4 +1,5 @@
 import datetime
+import json
 import os
 import uuid
 from typing import List, Dict, Any, Optional
@@ -6,12 +7,13 @@ from typing import List, Dict, Any, Optional
 import boto3
 from botocore.client import Config
 from dotenv import load_dotenv
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 
 from langchain_aws import ChatBedrock
 from langchain_community.retrievers import AmazonKnowledgeBasesRetriever
 from pydantic import BaseModel
 
+from backend.utils.custom_query_request import CustomQueryRequest
 from scout.DataIngest.models.schemas import (
     ChunkCreate,
     Criterion,
@@ -29,9 +31,12 @@ from scout.DataIngest.models.schemas import (
 )
 from scout.Pipelines.ingest_criteria import ingest_criteria_from_local_dir, ingest_criteria_from_s3
 from scout.LLMFlag.evaluation import MainEvaluator
+from scout.utils.llm_formats import format_llm_request
 from scout.utils.storage.postgres_storage_handler import PostgresStorageHandler
+from scout.utils.storage.postgres_models import Criterion as SqCriterion
 from scout.utils.utils import logger
 from backend.api.routes import get_current_user, get_db
+from starlette.concurrency import run_in_threadpool
 
 
 load_dotenv()
@@ -378,3 +383,149 @@ async def create_project(
         # Otherwise, wrap it in an HTTPException
         raise HTTPException(status_code=500, detail=f"Failed to create project: {str(e)}")
 
+
+@router.post("/custom-query-context")
+async def custom_query_context(
+    request_data: CustomQueryRequest,
+    criterion_id: uuid.UUID = Query(None, description="ID of the criterion to use for context"),
+    current_user: PyUser = Depends(get_current_user),
+    db: Any = Depends(get_db),
+    request: Request = None
+):
+    """
+    Process a custom query using the same context as the Bedrock evaluator for a given criterion.
+    
+    This endpoint retrieves relevant documents using the same mechanism as the analyse_project.py
+    script, formats them in the same way, and then passes them to the LLM along with the user's query.
+    
+    Args:
+        request_data: The custom query request
+        criterion_id: Optional criterion ID to retrieve question context
+        current_user: The authenticated user
+        db: Database session
+        request: The original HTTP request
+    """
+    try:
+        # Get model_id from request or use default
+        model_id = request_data.model_id or os.getenv("AWS_BEDROCK_MODEL_ID")
+        
+        # Get user's project
+        user_projects = current_user.projects
+        if not user_projects:
+            raise HTTPException(status_code=404, detail="No projects found for the current user.")
+        
+        # Get knowledge base ID from project
+        knowledge_id = user_projects[0].knowledgebase_id
+        if not knowledge_id:
+            raise HTTPException(status_code=500, detail="Knowledge Base ID not found in project")
+        
+        # Initialize AWS clients
+        session = boto3.session.Session()
+        region = session.region_name
+        
+        # Create the retriever
+        retriever = AmazonKnowledgeBasesRetriever(
+            knowledge_base_id=knowledge_id,
+            retrieval_config={
+                "vectorSearchConfiguration": {
+                    "numberOfResults": 5,  # Same as in analyse_project.py
+                    "overrideSearchType": "HYBRID",
+                }
+            },
+        )
+        
+        # Prepare the query
+        query_text = request_data.query
+        
+        # If a criterion ID is provided, add the criterion question to the query for better context
+        if criterion_id:
+            # Get the criterion from database
+            criterion = None
+            criterion_query = db.query(SqCriterion).filter(SqCriterion.id == criterion_id).first()
+            if criterion_query:
+                criterion = criterion_query
+
+            if criterion:
+                # Include criterion question for better context retrieval
+                enhanced_query = f"Criterion: {criterion.question}\nUser query: {query_text}"
+                logger.info(f"Enhanced query with criterion context: {enhanced_query}")
+                query_text = enhanced_query
+        
+        # Use retriever to get documents
+        logger.info(f"Retrieving documents for query: {query_text}")
+        documents = retriever.get_relevant_documents(query_text)
+        logger.info(f"Retrieved {len(documents)} documents for context")
+        
+        # Format documents into prompt format, just like in analyse_project.py
+        prompt_context = "Document extracts relevant to the query:\n\n"
+        
+        for i, doc in enumerate(documents):
+            source = doc.metadata.get('source', 'Unknown')
+            content = doc.page_content
+            
+            # Create document ID from source or use a default
+            doc_id = source.split('/')[-1] if source else f"document_{i+1}"
+            
+            prompt_context += f"Document {i+1}: {doc_id}\n"
+            prompt_context += f"Content: {content}\n\n"
+        
+        # Combine context with user query
+        final_prompt = f"{prompt_context}\nQuestion: {request_data.query}\n\nAnswer:"
+        
+        # Format request for the LLM
+        formatted_request = format_llm_request(
+            model_id=model_id,
+            prompt=final_prompt,
+            max_tokens=1000
+        )
+        
+        # Prepare payload for Lambda
+        payload = {
+            "query": str(formatted_request),
+            "modelId": str(model_id),
+            "knowledgeBaseId": str(knowledge_id)
+        }
+        
+        logger.info(f"Sending custom query with context to LLM")
+        
+        # Invoke Lambda function
+        client = boto3.client('lambda')
+        response = await run_in_threadpool(
+            lambda: client.invoke(
+                FunctionName='bd_base_query145',
+                InvocationType='RequestResponse',
+                Payload=json.dumps(payload)
+            )
+        )
+        
+        # Process response
+        response_payload = json.loads(response['Payload'].read())
+        
+        # # Log the LLM query
+        # if request:
+        #     asyncio.create_task(log_llm_query(
+        #         request=request,
+        #         user_id=current_user.id,
+        #         project_name=user_projects[0].name,
+        #         query=request_data.query,
+        #         db=db,
+        #         chat_session_id=request_data.chat_session_id,
+        #         model_id=model_id,
+        #         response=response_payload
+        #     ))
+        
+        # Return response to client
+        return {
+            "response": response_payload.get("response"),
+            "context": {
+                "documents_used": len(documents),
+                "criterion_id": str(criterion_id) if criterion_id else None
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in custom-query-context: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred while processing the query with context: {str(e)}"
+        )

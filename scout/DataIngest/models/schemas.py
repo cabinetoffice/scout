@@ -412,6 +412,7 @@ class ChatSessionBase(BaseModel):
 
 class ChatSessionCreate(BaseModel):
     title: str
+    id: Optional[UUID] = Field(None, description="Optional pre-defined ID for the session, typically from Lambda")
 
     
 class ChatSession(ChatSessionBase):

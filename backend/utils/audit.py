@@ -6,7 +6,8 @@ from scout.utils.storage import postgres_interface as interface
 from scout.utils.storage.postgres_models import ChatSession
 from uuid import UUID
 from sqlalchemy.orm import Session
-from sqlalchemy import update
+from sqlalchemy import select, update
+from scout.utils.storage.postgres_models import project_users
 
 # Import get_most_important_words locally to avoid circular imports
 from .summarise import get_most_important_words
@@ -19,6 +20,39 @@ async def create_audit_log(
     details: Optional[dict] = None,
     chat_session_id: Optional[UUID] = None
 ) -> None:
+
+    # Check if the chat session already exists
+    existing_session = db.query(ChatSession).filter(ChatSession.id == chat_session_id).first()
+    if not existing_session:
+
+        # Update the chat session title if chat_session_id is provided
+        if chat_session_id and details and "query" in details:
+            query = details["query"]
+            if len(query.split()) <= 3:
+                new_title = query
+            else:
+                important_words = get_most_important_words(query, num_important_words=3)
+                new_title = " ".join(important_words)
+
+            result = db.execute(
+                select(project_users.c.project_id).where(project_users.c.user_id == user_id)
+            ).fetchall()
+            project_ids = [row[0] for row in result]
+
+            new_session = ChatSession(
+                id=chat_session_id,
+                created_datetime=datetime.utcnow(),
+                updated_datetime=datetime.utcnow(),
+                title=new_title,
+                user_id=user_id,
+                project_id=project_ids[0],
+                deleted=False
+            )
+
+            db.add(new_session)
+            db.commit()
+            db.refresh(new_session)
+
     """Create an audit log entry."""
     client_host = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
@@ -34,24 +68,6 @@ async def create_audit_log(
     
     # Save the audit log
     interface.get_or_create_item(audit_log)
-
-    # Update the chat session title if chat_session_id is provided
-    if chat_session_id and details and "query" in details:
-        query = details["query"]
-        if len(query.split()) <= 3:
-            new_title = query
-        else:
-            important_words = get_most_important_words(query, num_important_words=3)
-            new_title = " ".join(important_words)
-
-        db.query(ChatSession).filter(
-            ChatSession.id == chat_session_id,
-            ChatSession.title == 'New Chat'
-        ).update({
-            "title": new_title,
-            "updated_datetime": datetime.utcnow()
-        })
-        db.commit()
 
 async def log_llm_query(request: Request, user_id: UUID, project_name: str, query: str, db: Session, chat_session_id: UUID, model_id: str, response: dict):
     """Log an LLM query."""

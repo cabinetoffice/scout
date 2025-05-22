@@ -398,14 +398,14 @@ export const fetchChatSessions = async () => {
   }
 };
 
-export const createChatSession = async (title: string) => {
+export const createChatSession = async (title: string, sessionId?: string) => {
   try {
     const response = await fetch('/api/chat-sessions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ title, id: sessionId }),
       credentials: 'include',
     });
     

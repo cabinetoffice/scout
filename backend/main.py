@@ -59,7 +59,7 @@ app.add_middleware(
 
 app.include_router(api_router, prefix="/api")
 app.include_router(s3_router)
-app.include_router(kb_router)
+app.include_router(kb_router, prefix="/api/kb")
 app.include_router(llm_router, prefix="/api/llm")
 
 if __name__ == "__main__":

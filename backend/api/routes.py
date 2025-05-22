@@ -538,7 +538,15 @@ async def custom_query(
     db: Any = Depends(get_db),
     request: Request = None
 ):
-    """Handle custom query with optional chat_session_id and model_id."""
+    """
+    Handle custom query with optional chat_session_id and model_id.
+    
+    This endpoint will:
+    1. Accept an optional chat_session_id from the frontend
+    2. Pass the chat_session_id to the Lambda function
+    3. Get a new or existing chat_session_id from the Lambda response
+    4. Return the chat_session_id to the frontend for session management
+    """
     if request_data.chat_session_id:
         print(f"Processing query for chat session: {request_data.chat_session_id}")
 
@@ -566,6 +574,12 @@ async def custom_query(
         "modelId": str(model_id),
         "knowledgeBaseId": str(knowledge_id)
     }
+    
+    # Add chat_session_id to payload if it exists
+    if request_data.chat_session_id and request_data.chat_session_id != uuid.UUID('00000000-0000-0000-0000-000000000000'):
+        payload["sessionId"] = str(request_data.chat_session_id)
+    else:
+        payload["sessionId"] = str('')
 
     logger.info(f"bedrock query payload: {payload}")
     
@@ -573,12 +587,21 @@ async def custom_query(
         # Run the blocking Lambda invocation in a thread pool
         response = await run_in_threadpool(
             lambda: client.invoke(
-                FunctionName='bd_base_query145',
+                FunctionName='bd_base_query146',
                 InvocationType='RequestResponse',
                 Payload=json.dumps(payload)
             )
         )
         response_payload = json.loads(response['Payload'].read())
+
+        # Extract the chat_session_id from the response
+        chat_session_id = None
+        response_body = json.loads(response_payload['body'])
+        if "sessionId" in response_body:
+            chat_session_id = UUID(response_body["sessionId"])
+        elif request_data.chat_session_id:
+            # Fallback to the provided session_id if not returned by lambda
+            chat_session_id = request_data.chat_session_id
         
         # Log the LLM query
         if request:
@@ -588,15 +611,20 @@ async def custom_query(
                 project_name=user_projects[0].name,
                 query=request_data.query,
                 db=db,
-                chat_session_id=request_data.chat_session_id,
+                chat_session_id=chat_session_id,
                 model_id=model_id,
                 response=response_payload
             ))
+
+        # Add the chat_session_id to the response
+        if chat_session_id:
+            response_payload["chat_session_id"] = str(chat_session_id)
 
         return response_payload
     except ClientError as e:
         logger.error(f"An error occurred while invoking the Lambda function: {e}")
         raise HTTPException(status_code=500, detail="An error occurred while invoking the Lambda function")
+
 class CreateUserRequest(BaseModel):
     action: str
     emails: List[str]
@@ -1232,17 +1260,24 @@ def create_chat_session(
         # Check if user has a project
         if not current_user.projects:
             raise HTTPException(status_code=400, detail="User has no projects")
-            
-        # Create a new session
-        session_id = uuid.uuid4()
+
+        session_id_to_use = session_data.id if session_data.id else uuid.uuid4()
+        
+        # Optional: Check if a session with this ID already exists for this user/project
+        # existing_session = db.query(ChatSession).filter(ChatSession.id == session_id_to_use).first()
+        # if existing_session:
+        #     raise HTTPException(status_code=409, detail=f"Session with ID {session_id_to_use} already exists.")
+
         new_session = ChatSession(
-            id=session_id,
+            id=session_id_to_use,
             created_datetime=datetime.utcnow(),
+            updated_datetime=datetime.utcnow(),
             title=session_data.title,
             user_id=current_user.id,
-            project_id=current_user.projects[0].id
+            project_id=current_user.projects[0].id,
+            deleted=False
         )
-        
+
         db.add(new_session)
         db.commit()
         db.refresh(new_session)

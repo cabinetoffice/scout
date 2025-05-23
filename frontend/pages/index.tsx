@@ -90,7 +90,7 @@ const Summary: React.FC = () => {
                 </li>
               </ul>
               <p>
-                This tool has preprocessed your documents and analyzed them
+                This tool has preprocessed your documents and analysed them
                 against the questions in the {gateUrl} workbook.
               </p>
             </>

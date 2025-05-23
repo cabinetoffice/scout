@@ -107,6 +107,21 @@ const CustomQuery = () => {
         setLoadingSessions(true);
         const sessionsData = await fetchChatSessions();
         setSessions(sessionsData || []);
+
+        // If no sessions exist, create a dummy session
+        if (!sessionsData || sessionsData.length === 0) {
+          const dummySession = {
+            id: '00000000-0000-0000-0000-000000000000',
+            title: "New Chat",
+            created_datetime: new Date().toISOString(),
+            updated_datetime: null,
+            message_count: 0,
+          };
+
+          setSessions([dummySession]);
+          setActiveSessionId(dummySession.id);
+          console.log("Dummy session created on page load:", dummySession.id);
+        }
       } catch (error) {
         console.error('Failed to load chat sessions:', error);
       } finally {

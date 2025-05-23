@@ -76,6 +76,9 @@ from scout.utils.storage.postgres_models import Project as SqProject
 from scout.utils.storage.postgres_models import Result as SqResult
 from scout.utils.storage.postgres_models import Project as SqProject
 from scout.utils.storage.postgres_models import AuditLog
+from scout.utils.storage.postgres_models import File as SqFile
+from scout.utils.storage.postgres_models import Chunk as SqChunk
+from scout.utils.storage.postgres_models import result_chunks
 from scout.utils.llm_formats import format_llm_request
 
 router = APIRouter()
@@ -1063,6 +1066,65 @@ async def get_summary_data(
         }
     except Exception as e:
         logger.exception("Error getting summary data: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/top-referenced-documents")
+async def get_top_referenced_documents(
+    current_user: PyUser = Depends(get_current_user),
+    db: Any = Depends(get_db),
+    limit: int = Query(10, ge=1, le=50)
+) -> dict:
+    """Get top referenced documents based on how many results reference their chunks."""
+    try:
+        if not current_user.projects:
+            return {
+                "documents": [],
+                "total": 0
+            }
+            
+        current_project_id = current_user.projects[0].id
+
+        # Query to get files and count how many results reference their chunks
+        query = (
+            db.query(
+                SqFile.id,
+                SqFile.name,
+                SqFile.clean_name,
+                SqFile.summary,
+                SqFile.type,
+                SqFile.created_datetime,
+                func.count(SqResult.id.distinct()).label('reference_count')
+            )
+            .outerjoin(SqChunk, SqFile.id == SqChunk.file_id)
+            .outerjoin(result_chunks, SqChunk.id == result_chunks.c.chunk_id)
+            .outerjoin(SqResult, result_chunks.c.result_id == SqResult.id)
+            .filter(SqFile.project_id == current_project_id)
+            .group_by(SqFile.id, SqFile.name, SqFile.clean_name, SqFile.summary, SqFile.type, SqFile.created_datetime)
+            .order_by(func.count(SqResult.id.distinct()).desc())
+            .limit(limit)
+        )
+        
+        results = query.all()
+        
+        documents = []
+        for result in results:
+            documents.append({
+                "id": str(result.id),
+                "name": result.name,
+                "clean_name": result.clean_name or result.name,
+                "summary": result.summary or "",
+                "type": result.type,
+                "reference_count": result.reference_count,
+                "created_datetime": result.created_datetime.isoformat() if result.created_datetime else None
+            })
+        
+        return {
+            "documents": documents,
+            "total": len(documents)
+        }
+        
+    except Exception as e:
+        logger.exception("Error getting top referenced documents: %s", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/admin/update_user")

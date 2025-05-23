@@ -30,8 +30,8 @@ code {
   position: absolute;
   top: 100%; /* Position below the main nav item */
   left: 0;
-  background-color: #333; /* Match header or choose a suitable color */
-  border: 1px solid #555;
+  background-color: #c05f79; /* Match header or choose a suitable color */
+  border: 1px solid #e296a8;
   border-radius: 4px;
   padding: 5px 0; /* Add some padding */
   min-width: 160px; /* Ensure minimum width */
@@ -48,11 +48,11 @@ code {
 }
 
 .submenu-link:hover {
-  background-color: #555;
+  background-color: #e0aebb;
 }
 
 .submenu-link.active {
-  background-color: #007bff;
+  background-color: #d4708e;
   font-weight: bold;
 }
 

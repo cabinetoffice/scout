@@ -270,7 +270,7 @@ const uploadBtn: React.CSSProperties = {
 const actionBtn: React.CSSProperties = {
   marginRight: "10px",
   padding: "4px 10px",
-  backgroundColor: "#007bff",
+  backgroundColor: "#d4708e",
   color: "white",
   border: "none",
   borderRadius: "4px",

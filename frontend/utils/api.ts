@@ -456,3 +456,16 @@ export const deleteChatSession = async (sessionId: string) => {
     throw error;
   }
 };
+
+export const fetchTopReferencedDocuments = async (limit: number = 10) => {
+  try {
+    const response = await fetch(`/api/top-referenced-documents?limit=${limit}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch top referenced documents');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching top referenced documents:', error);
+    throw error;
+  }
+};

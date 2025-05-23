@@ -10,15 +10,23 @@ interface PieChartProps {
 const PieChart: React.FC<PieChartProps> = ({ data, labels, onClickURL }) => {
   const ref = useRef<SVGSVGElement | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!ref.current) return;
+    if (!ref.current || !containerRef.current) return;
 
-    const width = 600; // Increase width to accommodate the legend
-    const height = 250;
-    const radius = Math.min(width, height) / 2 - 50; // Adjust radius to fit the legend
+    // Get container dimensions for responsive sizing
+    const containerWidth = containerRef.current.clientWidth;
+    const containerHeight = containerRef.current.clientHeight;
+    
+    const width = Math.min(containerWidth, 400);
+    const height = Math.min(containerHeight, 300);
+    const radius = Math.min(width, height) / 3;
 
-    // Define a color scale that complements light blue and white
+    // Clear previous chart
+    d3.select(ref.current).selectAll("*").remove();
+
+    // Define a color scale
     const color = d3
       .scaleOrdinal<string>()
       .domain(labels)
@@ -44,9 +52,11 @@ const PieChart: React.FC<PieChartProps> = ({ data, labels, onClickURL }) => {
     const svg = d3
       .select(ref.current)
       .attr("width", width)
-      .attr("height", height)
+      .attr("height", height);
+
+    const chartGroup = svg
       .append("g")
-      .attr("transform", `translate(${radius + 70}, ${height / 2})`); // Move chart to the right
+      .attr("transform", `translate(${width / 3}, ${height / 2})`);
 
     const tooltip = d3
       .select(tooltipRef.current)
@@ -83,7 +93,7 @@ const PieChart: React.FC<PieChartProps> = ({ data, labels, onClickURL }) => {
       window.location.href = url;
     };
 
-    svg
+    chartGroup
       .selectAll("path")
       .data(pie)
       .enter()
@@ -107,47 +117,51 @@ const PieChart: React.FC<PieChartProps> = ({ data, labels, onClickURL }) => {
         onClick(d);
       });
 
-    // Add legend
+    // Add responsive legend
     const legend = svg
       .append("g")
-      .attr("transform", `translate(${radius + 50}, -${height / 2 - 20})`); // Adjust legend position
-
-    const legendHeight = labels.length * 20;
-    const legendStartY = legendHeight * 2;
+      .attr("transform", `translate(${width / 3 + radius + 20}, ${height / 2 - (labels.length * 15) / 2})`);
 
     labels.forEach((label, i) => {
       const legendRow = legend
         .append("g")
-        .attr("transform", `translate(0, ${legendStartY + i * 20})`); // Centrally align labels
+        .attr("transform", `translate(0, ${i * 15})`);
 
       legendRow
         .append("rect")
-        .attr("width", 10)
-        .attr("height", 10)
+        .attr("width", 8)
+        .attr("height", 8)
         .attr("fill", color(i.toString()) as string);
 
       legendRow
         .append("text")
-        .attr("x", 20)
-        .attr("y", 10)
+        .attr("x", 12)
+        .attr("y", 8)
         .attr("text-anchor", "start")
+        .style("font-size", "12px")
         .style("text-transform", "capitalize")
         .text(label);
     });
 
     return () => {
       d3.select(ref.current).selectAll("*").remove();
-      tooltip.remove();
     };
-  }, [data, labels]);
+  }, [data, labels, onClickURL]);
 
   return (
     <div
-      style={{ display: "flex", flexDirection: "column", alignItems: "center" }}
+      ref={containerRef}
+      style={{ 
+        width: "100%", 
+        height: "100%", 
+        display: "flex", 
+        alignItems: "center", 
+        justifyContent: "center",
+        minHeight: "200px"
+      }}
     >
       <svg ref={ref}></svg>
       <div ref={tooltipRef} className="tooltip"></div>
-      <p>Breakdown of outputs by category</p>
     </div>
   );
 };

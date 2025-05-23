@@ -6,6 +6,8 @@ import "../public/styles/App.css";
 import "../public/styles/index.css";
 import "../public/styles/FileViewer.css";
 import "../public/styles/CustomQuery.css";
+import "../public/styles/theme-variables.css";
+import "../public/styles/pink-theme.css";
 import { fetchUser, logoutUser, fetchUserRole } from "../utils/api";
 
 interface User {
@@ -194,7 +196,7 @@ export default function MyApp({ Component, pageProps }: AppProps) {
           <div className="header-content">
             <div className="logo-container">
               <img 
-                src="/assets/nista_scout_logo.png" 
+                src="/assets/nista_scout_logo_c2.png" 
                 alt="NISTA Scout Logo" 
                 className="header-logo"
               />

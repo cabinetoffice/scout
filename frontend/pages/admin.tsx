@@ -63,11 +63,11 @@ export default function AdminPage({ refreshProjectInfo }: { refreshProjectInfo: 
           key={role.name}
           label={role.name}
           onClick={() => onRoleSelect(role.name)}
-          variant={selectedRole.name === role.name ? "filled" : "outlined"}
+          variant={selectedRole?.name === role.name ? "filled" : "outlined"}
           style={{
             backgroundColor:
-              selectedRole.name === role.name ? role.color : "transparent",
-            color: selectedRole.name === role.name ? "white" : "inherit",
+              selectedRole?.name === role.name ? role.color : "transparent",
+            color: selectedRole?.name === role.name ? "white" : "inherit",
             cursor: "pointer",
           }}
         />
@@ -599,7 +599,7 @@ const formInputStyle: React.CSSProperties = {
 };
 
 const saveButtonStyle: React.CSSProperties = {
-  backgroundColor: "#007bff",
+  backgroundColor: "#d4708e",
   color: "white",
   padding: "10px 15px",
   borderRadius: "5px",

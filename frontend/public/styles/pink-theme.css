@@ -1,0 +1,31 @@
+/* Custom Pink Theme Overrides for the Application */
+.ag-theme-alpine {
+  --ag-selected-row-background-color: rgba(212, 112, 142, 0.1);
+  --ag-row-hover-color: rgba(212, 112, 142, 0.05);
+  --ag-selected-tab-color: #d4708e;
+  --ag-range-selection-border-color: #d4708e;
+  --ag-range-selection-background-color: rgba(212, 112, 142, 0.2);
+  --ag-checkbox-checked-color: #d4708e;
+  --ag-checkbox-indeterminate-color: #d4708e;
+  --ag-input-focus-border-color: #d4708e;
+  --ag-alpine-active-color: #d4708e;
+}
+
+/* Button hover effects */
+button:hover {
+  opacity: 0.9;
+}
+
+/* Override any remaining blue focus outlines */
+*:focus {
+  outline-color: #e0aebb !important;
+}
+
+/* Link colors throughout the app */
+a {
+  color: #d4708e;
+}
+
+a:hover {
+  color: #c05f79;
+}

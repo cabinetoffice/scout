@@ -1,0 +1,11 @@
+/* Custom Pink Theme Tokens for easy maintenance */
+:root {
+  --pink-primary: #d4708e;
+  --pink-light: #e890a5;
+  --pink-lighter: #f9e2e9;
+  --pink-dark: #c05f79;
+  --pink-darker: #9d4d63;
+  --pink-transparent: rgba(212, 112, 142, 0.2);
+  --pink-bg-hover: rgba(212, 112, 142, 0.05);
+  --pink-bg-light: rgba(212, 112, 142, 0.1);
+}

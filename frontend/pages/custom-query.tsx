@@ -97,6 +97,8 @@ const CustomQuery = () => {
   // Menu state for session actions
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedSessionForMenu, setSelectedSessionForMenu] = useState<ChatSession | null>(null);
+  
+  const [isNewChat, setIsNewChat] = useState(false);
 
   // Load chat sessions on component mount
   useEffect(() => {
@@ -105,6 +107,21 @@ const CustomQuery = () => {
         setLoadingSessions(true);
         const sessionsData = await fetchChatSessions();
         setSessions(sessionsData || []);
+
+        // If no sessions exist, create a dummy session
+        if (!sessionsData || sessionsData.length === 0) {
+          const dummySession = {
+            id: '00000000-0000-0000-0000-000000000000',
+            title: "New Chat",
+            created_datetime: new Date().toISOString(),
+            updated_datetime: null,
+            message_count: 0,
+          };
+
+          setSessions([dummySession]);
+          setActiveSessionId(dummySession.id);
+          console.log("Dummy session created on page load:", dummySession.id);
+        }
       } catch (error) {
         console.error('Failed to load chat sessions:', error);
       } finally {
@@ -177,12 +194,36 @@ const CustomQuery = () => {
       }
     };
 
-    loadChatHistory();
+    if (!isNewChat) {
+      loadChatHistory()
+    }
+    else
+    {
+      setLoading(false);
+      setLoadingSessions(false);
+      setLoadingHistory(false);
+      setIsNewChat(false);
+
+      const dummySession = {
+        id: '00000000-0000-0000-0000-000000000000',
+        title: "New Chat",
+        created_datetime: new Date().toISOString(),
+        updated_datetime: null,
+        message_count: 0,
+      };
+
+      setSessions([dummySession, ...sessions]);
+      console.log("Dummy session created:", dummySession.id);
+      setActiveSessionId(dummySession.id);
+    }
+;
   }, [activeSessionId]);
 
   // Handle creating a new session
   const handleCreateSession = async () => {
     try {
+      // Create a new session without providing a session ID upfront
+      // The session ID will be assigned by the backend when a query is made
       const newSession = await createChatSession("New Session");
       setSessions([newSession, ...sessions]);
       setActiveSessionId(newSession.id);
@@ -236,20 +277,35 @@ const CustomQuery = () => {
     setLoading(true);
 
     try {
-      // Create a new session if none is active
-      if (!activeSessionId) {
+      // First submit the query and get a response
+      const data = await submitQuery(message, activeSessionId ?? undefined, selectedModelId);
+      
+      // Get the session ID from the response
+      const responseSessionId = data.chat_session_id ? 
+        data.chat_session_id : 
+        (data.body && JSON.parse(data.body).chat_session_id) || null;
+      
+      // If we don't have an active session but got a session ID from the response, create one
+      if (!activeSessionId && responseSessionId) {
         const sessionName = message.length > 30 ? 
           message.substring(0, 30) + "..." : 
           message;
           
-        const newSession = await createChatSession(sessionName);
+        // Create a chat session with the ID from the query response
+        const newSession = await createChatSession(sessionName, responseSessionId);
         setActiveSessionId(newSession.id);
         setSessions(prev => [newSession, ...prev]);
       }
+      // If we have a new session ID that's different from our active one
+      else if (responseSessionId && responseSessionId !== activeSessionId) {
+        setActiveSessionId(responseSessionId);
+        // Refresh sessions to ensure the new one is included
+        const updatedSessions = await fetchChatSessions();
+        setSessions(updatedSessions);
+      }
 
-      const data = await submitQuery(message, activeSessionId ?? undefined, selectedModelId);
       const botMessage = { 
-        text: JSON.parse(data.body).response, 
+        text: data.response || (data.body ? JSON.parse(data.body).response : "No response"), 
         isUser: false, 
         timestamp: new Date().toISOString() 
       };
@@ -344,36 +400,36 @@ const CustomQuery = () => {
           borderBottom: '1px solid rgba(0, 0, 0, 0.12)'
         }}>
           <Typography variant="h6">Chat Sessions</Typography>
-          <IconButton
-            onClick={async () => {
-              try {
-                // Check if a "New Chat" session with 0 messages already exists
-                const existingNewChatSession = sessions.find(
-                  (session) => session.title === "New Chat" && session.message_count === 0
-                );
+                <IconButton
+        onClick={() => { // Changed from async, no direct API call here anymore
+          // Check if a "New Chat" session with 0 messages already exists
+          // This can be useful if the user clicks "New Chat" multiple times
+          // without sending a message in an already visually prepared "New Chat".
+          const existingEmptyNewChatSession = sessions.find(
+            (session) => session.title === "New Chat" && session.message_count === 0
+          );
 
-                if (existingNewChatSession) {
-                  // If such a session exists, set it as the active session
-                  setActiveSessionId(existingNewChatSession.id);
-                  setMessages([]); // Clear messages
-                  setInput(""); // Clear input
-                  return;
-                }
-
-                // Otherwise, create a new session
-                const newSession = await createChatSession("New Chat");
-                setSessions((prev) => [newSession, ...prev]);
-                setActiveSessionId(newSession.id); // Set new session as active
-                setMessages([]); // Clear messages
-                setInput(""); // Clear input
-              } catch (error) {
-                console.error("Failed to create new session:", error);
-              }
-            }}
-            color="primary"
-          >
-            <AddIcon />
-          </IconButton>
+          if (existingEmptyNewChatSession) {
+            // If such a session exists (perhaps from a previous click where no message was sent),
+            // set it as the active session.
+            setActiveSessionId(existingEmptyNewChatSession.id);
+          } else {
+            // If no such empty "New Chat" session exists,
+            // set activeSessionId to null. This signals to handleSendMessage
+            // that the next message will initiate a brand new session,
+            // whose ID will come from the submitQuery response.
+            setActiveSessionId(null);
+          }
+          setIsNewChat(true);
+          setMessages([]); // Clear messages from any previous session
+          setInput("");   // Clear any typed input
+          // The actual ChatSession object will be created in handleSendMessage
+          // after the first message is sent and a session ID is received from the backend.
+        }}
+        color="primary"
+      >
+        <AddIcon />
+      </IconButton>
         </Box>
         
         {loadingSessions ? (

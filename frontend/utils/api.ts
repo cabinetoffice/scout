@@ -398,14 +398,14 @@ export const fetchChatSessions = async () => {
   }
 };
 
-export const createChatSession = async (title: string) => {
+export const createChatSession = async (title: string, sessionId?: string) => {
   try {
     const response = await fetch('/api/chat-sessions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ title, id: sessionId }),
       credentials: 'include',
     });
     
@@ -453,6 +453,19 @@ export const deleteChatSession = async (sessionId: string) => {
     return await response.json();
   } catch (error) {
     console.error('Error deleting chat session:', error);
+    throw error;
+  }
+};
+
+export const fetchTopReferencedDocuments = async (limit: number = 10) => {
+  try {
+    const response = await fetch(`/api/top-referenced-documents?limit=${limit}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch top referenced documents');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching top referenced documents:', error);
     throw error;
   }
 };

@@ -42,6 +42,7 @@ import AddIcon from '@mui/icons-material/Add';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import SettingsIcon from '@mui/icons-material/Settings';
 import { ModelSelector } from '@/components/ModelSelector';
 
 // Interface for chat sessions
@@ -87,6 +88,10 @@ const CustomQuery = () => {
   // Model selection
   const [models, setModels] = useState<LLMModel[]>([]);
   const [selectedModelId, setSelectedModelId] = useState<string>("");
+  
+  // System prompt settings
+  const [systemPrompt, setSystemPrompt] = useState<string>("");
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   
   // Dialog states
   const [editSessionDialogOpen, setEditSessionDialogOpen] = useState(false);
@@ -278,7 +283,12 @@ const CustomQuery = () => {
 
     try {
       // First submit the query and get a response
-      const data = await submitQuery(message, activeSessionId ?? undefined, selectedModelId);
+      const data = await submitQuery(
+        message, 
+        activeSessionId ?? undefined, 
+        selectedModelId,
+        systemPrompt || undefined  // Pass system prompt if it's not empty
+      );
       
       // Get the session ID from the response
       const responseSessionId = data.chat_session_id ? 
@@ -577,6 +587,14 @@ const CustomQuery = () => {
             maxRows={4}
             sx={{ mr: 1 }}
           />
+          <IconButton 
+            onClick={() => setSettingsDialogOpen(true)}
+            disabled={loading}
+            sx={{ mr: 1 }}
+            title="System Prompt Settings"
+          >
+            <SettingsIcon />
+          </IconButton>
           <Button 
             variant="contained" 
             onClick={sendMessage} 
@@ -638,6 +656,45 @@ const CustomQuery = () => {
         <DialogActions>
           <Button onClick={() => setDeleteSessionDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleDeleteSession} color="error">Delete</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* System Prompt Settings Dialog */}
+      <Dialog 
+        open={settingsDialogOpen} 
+        onClose={() => setSettingsDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>System Prompt Settings</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+            Configure a custom system prompt that will be sent with your queries to provide context and instructions to the AI model.
+          </Typography>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="System Prompt"
+            fullWidth
+            multiline
+            rows={6}
+            variant="outlined"
+            value={systemPrompt}
+            onChange={(e) => setSystemPrompt(e.target.value)}
+            placeholder="Enter your custom system prompt here..."
+            helperText="This prompt will be included with all your queries in this session. Leave empty to use the default system behavior."
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSettingsDialogOpen(false)}>Cancel</Button>
+          <Button 
+            onClick={() => {
+              setSettingsDialogOpen(false);
+            }}
+            variant="contained"
+          >
+            Save
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

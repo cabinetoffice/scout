@@ -114,6 +114,13 @@ export default function AdminPage({ refreshProjectInfo }: { refreshProjectInfo: 
       window.alert("Scout can only assign 1 project per user at this time");
       return;
     }
+
+    // Validate role is selected
+    if (!formUser.role?.name) {
+      window.alert("Please select a role for the user");
+      return;
+    }
+
     if (editingIndex === null) {
       try {
         const newUser = await createUser({
@@ -131,12 +138,11 @@ export default function AdminPage({ refreshProjectInfo }: { refreshProjectInfo: 
           return;
         }
 
-        if (createdUser.role.name !== formUser.role.name) {
-          await updateUser({
-            user_id: createdUser.id,
-            role: formUser.role.name,
-          });
-        }
+        // Always update role for new users since they might not have one initially
+        await updateUser({
+          user_id: createdUser.id,
+          role: formUser.role.name,
+        });
 
         fetchUsers();
       } catch (error) {
@@ -146,8 +152,8 @@ export default function AdminPage({ refreshProjectInfo }: { refreshProjectInfo: 
       try {
         const currentUser = users[editingIndex];
 
-        // Update role if changed
-        if (currentUser.role.name !== formUser.role.name) {
+        // Update role if changed or if current user has no role
+        if (!currentUser.role?.name || currentUser.role.name !== formUser.role.name) {
           await updateUser({
             user_id: currentUser.id,
             role: formUser.role.name,

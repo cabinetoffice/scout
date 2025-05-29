@@ -26,7 +26,9 @@ import {
   Select,
   FormControl,
   InputLabel,
-  SelectChangeEvent
+  SelectChangeEvent,
+  Snackbar,
+  Alert
 } from "@mui/material";
 import { 
   submitQuery, 
@@ -43,7 +45,9 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SettingsIcon from '@mui/icons-material/Settings';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { ModelSelector } from '@/components/ModelSelector';
+import ReactMarkdown from 'react-markdown';
 
 // Interface for chat sessions
 interface ChatSession {
@@ -93,6 +97,12 @@ const CustomQuery = () => {
   const [systemPrompt, setSystemPrompt] = useState<string>("");
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   
+  // Copy notification
+  const [copySnackbarOpen, setCopySnackbarOpen] = useState(false);
+  
+  // System prompt format notification
+  const [promptFormatSnackbarOpen, setPromptFormatSnackbarOpen] = useState(false);
+  
   // Dialog states
   const [editSessionDialogOpen, setEditSessionDialogOpen] = useState(false);
   const [deleteSessionDialogOpen, setDeleteSessionDialogOpen] = useState(false);
@@ -104,6 +114,87 @@ const CustomQuery = () => {
   const [selectedSessionForMenu, setSelectedSessionForMenu] = useState<ChatSession | null>(null);
   
   const [isNewChat, setIsNewChat] = useState(false);
+
+  // Utility function to validate and format system prompt
+  const validateAndFormatSystemPrompt = (prompt: string): { formattedPrompt: string; wasAutoFormatted: boolean } => {
+    const trimmedPrompt = prompt.trim();
+    
+    // Check if prompt is empty
+    if (!trimmedPrompt) {
+      return { formattedPrompt: trimmedPrompt, wasAutoFormatted: false };
+    }
+    
+    // Required components for validation
+    const requiredComponents = [
+      'Search results:',
+      '<context>',
+      '$search_results$',
+      '</context>',
+      'Question: $query$',
+      'Format your response in proper Markdown'
+    ];
+    
+    // Check if all required components are present
+    const hasAllComponents = requiredComponents.every(component => 
+      trimmedPrompt.includes(component)
+    );
+    
+    // If the prompt doesn't have the required format, return the standard format
+    if (!hasAllComponents) {
+      const standardFormat = `Search results:
+<context>
+$search_results$
+</context>
+
+Question: $query$
+
+Format your response in proper Markdown`;
+      return { formattedPrompt: standardFormat, wasAutoFormatted: true };
+    }
+    
+    return { formattedPrompt: trimmedPrompt, wasAutoFormatted: false };
+  };
+
+  // Utility function to detect if text contains markdown
+  const containsMarkdown = (text: string): boolean => {
+    const markdownPatterns = [
+      /\*\*.*\*\*/,        // Bold text
+      /\*.*\*/,            // Italic text
+      /^#{1,6}\s/m,        // Headers
+      /^\s*[-*+]\s/m,      // Unordered lists
+      /^\s*\d+\.\s/m,      // Ordered lists
+      /`.*`/,              // Inline code
+      /```[\s\S]*?```/,    // Code blocks
+      /\[.*\]\(.*\)/,      // Links
+      /^\s*>\s/m,          // Blockquotes
+      /\|.*\|/,            // Tables
+    ];
+    
+    return markdownPatterns.some(pattern => pattern.test(text));
+  };
+
+  // Function to copy text to clipboard
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopySnackbarOpen(true);
+    } catch (error) {
+      console.error('Failed to copy text to clipboard:', error);
+      // Fallback for browsers that don't support clipboard API
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        setCopySnackbarOpen(true);
+      } catch (fallbackError) {
+        console.error('Fallback copy failed:', fallbackError);
+      }
+      document.body.removeChild(textArea);
+    }
+  };
 
   // Load chat sessions on component mount
   useEffect(() => {
@@ -531,6 +622,7 @@ const CustomQuery = () => {
                 }}
               >
                 <Typography
+                  component="div"
                   sx={{
                     backgroundColor: msg.isUser ? "#DCF8C6" : "#FFF",
                     display: "inline-block",
@@ -538,14 +630,89 @@ const CustomQuery = () => {
                     borderRadius: 2,
                     maxWidth: '80%',
                     boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-                    wordBreak: 'break-word'
+                    wordBreak: 'break-word',
+                    textAlign: 'left'
                   }}
                 >
-                  {msg.text}
+                  {!msg.isUser && containsMarkdown(msg.text) ? (
+                    <ReactMarkdown
+                      components={{
+                        // Custom styling for markdown elements
+                        h1: ({children}) => <Typography variant="h4" component="h1" sx={{ mb: 1 }}>{children}</Typography>,
+                        h2: ({children}) => <Typography variant="h5" component="h2" sx={{ mb: 1 }}>{children}</Typography>,
+                        h3: ({children}) => <Typography variant="h6" component="h3" sx={{ mb: 1 }}>{children}</Typography>,
+                        p: ({children}) => <Typography paragraph sx={{ mb: 1, '&:last-child': { mb: 0 } }}>{children}</Typography>,
+                        code: ({children}) => (
+                          <Typography 
+                            component="code" 
+                            sx={{ 
+                              backgroundColor: '#f5f5f5', 
+                              padding: '2px 4px', 
+                              borderRadius: 1, 
+                              fontFamily: 'monospace',
+                              fontSize: '0.875em'
+                            }}
+                          >
+                            {children}
+                          </Typography>
+                        ),
+                        pre: ({children}) => (
+                          <Box
+                            component="pre"
+                            sx={{ 
+                              backgroundColor: '#f5f5f5', 
+                              p: 2, 
+                              borderRadius: 1, 
+                              overflow: 'auto',
+                              fontFamily: 'monospace',
+                              fontSize: '0.875em',
+                              mb: 1
+                            }}
+                          >
+                            {children}
+                          </Box>
+                        ),
+                        ul: ({children}) => <Box component="ul" sx={{ pl: 2, mb: 1 }}>{children}</Box>,
+                        ol: ({children}) => <Box component="ol" sx={{ pl: 2, mb: 1 }}>{children}</Box>,
+                        li: ({children}) => <Typography component="li" sx={{ mb: 0.5 }}>{children}</Typography>,
+                        blockquote: ({children}) => (
+                          <Box
+                            component="blockquote"
+                            sx={{ 
+                              borderLeft: '4px solid #ddd', 
+                              pl: 2, 
+                              ml: 1, 
+                              fontStyle: 'italic',
+                              backgroundColor: '#f9f9f9',
+                              py: 1,
+                              mb: 1
+                            }}
+                          >
+                            {children}
+                          </Box>
+                        ),
+                      }}
+                    >
+                      {msg.text}
+                    </ReactMarkdown>
+                  ) : (
+                    msg.text
+                  )}
                 </Typography>
-                <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: 'text.secondary' }}>
-                  {new Date(msg.timestamp).toLocaleTimeString()} • {new Date(msg.timestamp).toLocaleDateString()}
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: msg.isUser ? 'flex-end' : 'flex-start', mt: 0.5 }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', mr: 1 }}>
+                    {new Date(msg.timestamp).toLocaleTimeString()} • {new Date(msg.timestamp).toLocaleDateString()}
+                  </Typography>
+                  <Tooltip title="Copy message">
+                    <IconButton
+                      size="small"
+                      onClick={() => copyToClipboard(msg.text)}
+                      sx={{ p: 0.5 }}
+                    >
+                      <ContentCopyIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
               </Box>
             ))
           )}
@@ -671,13 +838,31 @@ const CustomQuery = () => {
           <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
             Configure a custom system prompt that will be sent with your queries to provide context and instructions to the AI model.
           </Typography>
+          
+          <Typography variant="body2" color="primary" sx={{ mb: 2, fontWeight: 'bold' }}>
+            Note: If your prompt doesn't include the required format, it will be automatically adjusted to include:
+          </Typography>
+          
+          <Paper sx={{ p: 2, mb: 2, backgroundColor: '#f5f5f5' }}>
+            <Typography variant="body2" component="pre" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+{`Search results:
+<context>
+$search_results$
+</context>
+
+Question: $query$
+
+Format your response in proper Markdown`}
+            </Typography>
+          </Paper>
+          
           <TextField
             autoFocus
             margin="dense"
             label="System Prompt"
             fullWidth
             multiline
-            rows={6}
+            rows={8}
             variant="outlined"
             value={systemPrompt}
             onChange={(e) => setSystemPrompt(e.target.value)}
@@ -689,6 +874,11 @@ const CustomQuery = () => {
           <Button onClick={() => setSettingsDialogOpen(false)}>Cancel</Button>
           <Button 
             onClick={() => {
+              const { formattedPrompt, wasAutoFormatted } = validateAndFormatSystemPrompt(systemPrompt);
+              setSystemPrompt(formattedPrompt);
+              if (wasAutoFormatted) {
+                setPromptFormatSnackbarOpen(true);
+              }
               setSettingsDialogOpen(false);
             }}
             variant="contained"
@@ -697,6 +887,38 @@ const CustomQuery = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      
+      {/* Copy Success Snackbar */}
+      <Snackbar
+        open={copySnackbarOpen}
+        autoHideDuration={2000}
+        onClose={() => setCopySnackbarOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={() => setCopySnackbarOpen(false)} 
+          severity="success" 
+          sx={{ width: '100%' }}
+        >
+          Message copied to clipboard!
+        </Alert>
+      </Snackbar>
+      
+      {/* System Prompt Format Notification */}
+      <Snackbar
+        open={promptFormatSnackbarOpen}
+        autoHideDuration={4000}
+        onClose={() => setPromptFormatSnackbarOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={() => setPromptFormatSnackbarOpen(false)} 
+          severity="info" 
+          sx={{ width: '100%' }}
+        >
+          System prompt was automatically formatted to include required components.
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

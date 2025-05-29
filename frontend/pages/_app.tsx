@@ -193,10 +193,13 @@ export default function MyApp({ Component, pageProps }: AppProps) {
           className="App-header"
           style={{ width: "15%", height: "100vh" }}
         >
+          <div className="wave"></div>
+          <div className="wave"></div>
+          <div className="wave"></div>
           <div className="header-content">
             <div className="logo-container">
               <img 
-                src="/assets/nista_scout_logo_c2.png" 
+                src="/assets/nista_scout_red.png" 
                 alt="NISTA Scout Logo" 
                 className="header-logo"
               />

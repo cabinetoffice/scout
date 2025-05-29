@@ -119,9 +119,17 @@ const CustomQuery = () => {
   const validateAndFormatSystemPrompt = (prompt: string): { formattedPrompt: string; wasAutoFormatted: boolean } => {
     const trimmedPrompt = prompt.trim();
     
-    // Check if prompt is empty
+    // Check if prompt is empty - return default format
     if (!trimmedPrompt) {
-      return { formattedPrompt: trimmedPrompt, wasAutoFormatted: false };
+      const defaultFormat = `Search results:
+<context>
+$search_results$
+</context>
+
+Question: $query$
+
+Format your response in proper Markdown`;
+      return { formattedPrompt: defaultFormat, wasAutoFormatted: false };
     }
     
     // Required components for validation
@@ -139,20 +147,22 @@ const CustomQuery = () => {
       trimmedPrompt.includes(component)
     );
     
-    // If the prompt doesn't have the required format, return the standard format
-    if (!hasAllComponents) {
-      const standardFormat = `Search results:
+    // If the prompt already has the required format, use it as-is
+    if (hasAllComponents) {
+      return { formattedPrompt: trimmedPrompt, wasAutoFormatted: false };
+    }
+    
+    // If the prompt doesn't have the required format, append it to the default format
+    const standardFormatWithCustom = `Search results:
 <context>
 $search_results$
 </context>
 
 Question: $query$
 
-Format your response in proper Markdown`;
-      return { formattedPrompt: standardFormat, wasAutoFormatted: true };
-    }
+Format your response in proper Markdown. ${trimmedPrompt}`;
     
-    return { formattedPrompt: trimmedPrompt, wasAutoFormatted: false };
+    return { formattedPrompt: standardFormatWithCustom, wasAutoFormatted: true };
   };
 
   // Utility function to detect if text contains markdown
@@ -836,11 +846,11 @@ Format your response in proper Markdown`;
         <DialogTitle>System Prompt Settings</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-            Configure a custom system prompt that will be sent with your queries to provide context and instructions to the AI model.
+            Configure a custom system prompt that will be appended to the default format to provide additional context and instructions to the AI model.
           </Typography>
           
           <Typography variant="body2" color="primary" sx={{ mb: 2, fontWeight: 'bold' }}>
-            Note: If your prompt doesn't include the required format, it will be automatically adjusted to include:
+            Your custom instructions will be appended to the standard format. For example, if you enter "add -Scout Generated- text after every sentence", the final prompt will be:
           </Typography>
           
           <Paper sx={{ p: 2, mb: 2, backgroundColor: '#f5f5f5' }}>
@@ -852,22 +862,22 @@ $search_results$
 
 Question: $query$
 
-Format your response in proper Markdown`}
+Format your response in proper Markdown. add -Scout Generated- text after every sentence`}
             </Typography>
           </Paper>
           
           <TextField
             autoFocus
             margin="dense"
-            label="System Prompt"
+            label="Custom System Prompt Instructions"
             fullWidth
             multiline
             rows={8}
             variant="outlined"
             value={systemPrompt}
             onChange={(e) => setSystemPrompt(e.target.value)}
-            placeholder="Enter your custom system prompt here..."
-            helperText="This prompt will be included with all your queries in this session. Leave empty to use the default system behavior."
+            placeholder="Enter additional instructions here (e.g., 'use bullet points', 'be concise', 'include examples')..."
+            helperText="These instructions will be appended to the standard format. Leave empty to use only the default format."
           />
         </DialogContent>
         <DialogActions>
@@ -916,7 +926,7 @@ Format your response in proper Markdown`}
           severity="info" 
           sx={{ width: '100%' }}
         >
-          System prompt was automatically formatted to include required components.
+          Custom instructions appended to the standard system prompt format.
         </Alert>
       </Snackbar>
     </Box>

@@ -269,13 +269,13 @@ export const createUser = async (createUserRequest: CreateUserRequest): Promise<
     }
     return response.json();
 };
-export const submitQuery = async (query: string, chat_session_id?: string, model_id?: string): Promise<any> => {
+export const submitQuery = async (query: string, chat_session_id?: string, model_id?: string, prompt_template?: string): Promise<any> => {
   const response = await fetch(`/api/custom-query`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ query, chat_session_id, model_id }),
+    body: JSON.stringify({ query, chat_session_id, model_id, prompt_template }),
   });
 
   if (!response.ok) {

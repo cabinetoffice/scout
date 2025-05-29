@@ -318,12 +318,12 @@ Format your response in proper Markdown. ${trimmedPrompt}`;
         message_count: 0,
       };
 
-      setSessions([dummySession, ...sessions]);
+      setSessions(prevSessions => [dummySession, ...prevSessions]);
       console.log("Dummy session created:", dummySession.id);
       setActiveSessionId(dummySession.id);
     }
 ;
-  }, [activeSessionId]);
+  }, [activeSessionId, isNewChat]);
 
   // Handle creating a new session
   const handleCreateSession = async () => {
@@ -376,7 +376,7 @@ Format your response in proper Markdown. ${trimmedPrompt}`;
   };
 
   // Handle sending a message
-  const handleSendMessage = async (message: string) => {
+  const handleSendMessage = useCallback(async (message: string) => {
     const timestamp = new Date().toISOString();
     const userMessage = { text: message, isUser: true, timestamp };
     setMessages((prevMessages) => [...prevMessages, userMessage]);
@@ -430,7 +430,7 @@ Format your response in proper Markdown. ${trimmedPrompt}`;
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeSessionId, selectedModelId, systemPrompt]);
 
   const sendMessage = () => {
     if (input.trim() === "") return;
@@ -481,7 +481,7 @@ Format your response in proper Markdown. ${trimmedPrompt}`;
     if (query) {
       handleSendMessage(query);
     }
-  }, []);
+  }, [handleSendMessage]);
 
   const drawerWidth = 240;
 
@@ -859,7 +859,7 @@ Format your response in proper Markdown. ${trimmedPrompt}`;
           </Typography>
           
           <Typography variant="body2" color="primary" sx={{ mb: 2, fontWeight: 'bold' }}>
-            Your custom instructions will be appended to the standard format. For example, if you enter "add -Scout Generated- text after every sentence", the final prompt will be:
+            Your custom instructions will be appended to the standard format. For example, if you enter &quot;add -Scout Generated- text after every sentence&quot;, the final prompt will be:
           </Typography>
           
           <Paper sx={{ p: 2, mb: 2, backgroundColor: '#f5f5f5' }}>

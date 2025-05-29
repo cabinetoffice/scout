@@ -95,9 +95,33 @@ const AuditLogsPage: React.FC = () => {
       cellRenderer: (params: ICellRendererParams<AuditLog, any>) => {
         if (!params.value) return "";
         try {
+          const details = params.value;
+          
+          // Special handling for LLM queries with custom system prompts
+          if (details.custom_system_prompt) {
+            return (
+              <div style={{ whiteSpace: "pre-wrap" }}>
+                <div style={{ fontWeight: "bold", color: "#1976d2", marginBottom: "4px" }}>
+                  🎯 Custom System Prompt Used
+                </div>
+                <div style={{ fontSize: "0.85em", fontStyle: "italic", marginBottom: "8px", padding: "4px", backgroundColor: "#f5f5f5", borderRadius: "4px" }}>
+                  {details.custom_system_prompt.substring(0, 100)}
+                  {details.custom_system_prompt.length > 100 ? "..." : ""}
+                </div>
+                <details>
+                  <summary style={{ cursor: "pointer", fontSize: "0.9em", color: "#666" }}>
+                    View Full Details
+                  </summary>
+                  {JSON.stringify(details, null, 2)}
+                </details>
+              </div>
+            );
+          }
+          
+          // Default rendering for other entries
           return (
             <div style={{ whiteSpace: "pre-wrap" }}>
-              {JSON.stringify(params.value, null, 2)}
+              {JSON.stringify(details, null, 2)}
             </div>
           );
         } catch (e) {

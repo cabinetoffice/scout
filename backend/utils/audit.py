@@ -69,20 +69,26 @@ async def create_audit_log(
     # Save the audit log
     interface.get_or_create_item(audit_log)
 
-async def log_llm_query(request: Request, user_id: UUID, project_name: str, query: str, db: Session, chat_session_id: UUID, model_id: str, response: dict):
+async def log_llm_query(request: Request, user_id: UUID, project_name: str, query: str, db: Session, chat_session_id: UUID, model_id: str, response: dict, custom_system_prompt: Optional[str] = None):
     """Log an LLM query."""
+    details = {
+        "project_name": project_name,
+        "model_id": model_id,
+        "query": query,
+        "response": response,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+    
+    # Add custom system prompt to details if provided
+    if custom_system_prompt:
+        details["custom_system_prompt"] = custom_system_prompt
+    
     await create_audit_log(
         request,
         user_id,
         "llm_query",
         db,
-        {
-            "project_name": project_name,
-            "model_id": model_id,
-            "query": query,
-            "response": response,
-            "timestamp": datetime.utcnow().isoformat()
-        },
+        details,
         chat_session_id=chat_session_id
     )
 

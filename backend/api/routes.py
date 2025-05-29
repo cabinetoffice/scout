@@ -620,7 +620,8 @@ async def custom_query(
                 db=db,
                 chat_session_id=chat_session_id,
                 model_id=model_id,
-                response=response_payload
+                response=response_payload,
+                custom_system_prompt=request_data.prompt_template
             ))
 
         # Add the chat_session_id to the response

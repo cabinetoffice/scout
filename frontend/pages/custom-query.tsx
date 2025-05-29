@@ -648,10 +648,10 @@ Format your response in proper Markdown. ${trimmedPrompt}`;
                     <ReactMarkdown
                       components={{
                         // Custom styling for markdown elements
-                        h1: ({children}) => <Typography variant="h4" component="h1" sx={{ mb: 1 }}>{children}</Typography>,
-                        h2: ({children}) => <Typography variant="h5" component="h2" sx={{ mb: 1 }}>{children}</Typography>,
-                        h3: ({children}) => <Typography variant="h6" component="h3" sx={{ mb: 1 }}>{children}</Typography>,
-                        p: ({children}) => <Typography paragraph sx={{ mb: 1, '&:last-child': { mb: 0 } }}>{children}</Typography>,
+                        h1: ({children}) => <Typography variant="h4" component="h1" sx={{ mb: 1, wordBreak: 'break-word' }}>{children}</Typography>,
+                        h2: ({children}) => <Typography variant="h5" component="h2" sx={{ mb: 1, wordBreak: 'break-word' }}>{children}</Typography>,
+                        h3: ({children}) => <Typography variant="h6" component="h3" sx={{ mb: 1, wordBreak: 'break-word' }}>{children}</Typography>,
+                        p: ({children}) => <Typography paragraph sx={{ mb: 1, '&:last-child': { mb: 0 }, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{children}</Typography>,
                         code: ({children}) => (
                           <Typography 
                             component="code" 
@@ -660,7 +660,10 @@ Format your response in proper Markdown. ${trimmedPrompt}`;
                               padding: '2px 4px', 
                               borderRadius: 1, 
                               fontFamily: 'monospace',
-                              fontSize: '0.875em'
+                              fontSize: '0.875em',
+                              wordBreak: 'break-all',
+                              maxWidth: '100%',
+                              display: 'inline-block'
                             }}
                           >
                             {children}
@@ -676,15 +679,18 @@ Format your response in proper Markdown. ${trimmedPrompt}`;
                               overflow: 'auto',
                               fontFamily: 'monospace',
                               fontSize: '0.875em',
-                              mb: 1
+                              mb: 1,
+                              maxWidth: '100%',
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word'
                             }}
                           >
                             {children}
                           </Box>
                         ),
-                        ul: ({children}) => <Box component="ul" sx={{ pl: 2, mb: 1 }}>{children}</Box>,
-                        ol: ({children}) => <Box component="ol" sx={{ pl: 2, mb: 1 }}>{children}</Box>,
-                        li: ({children}) => <Typography component="li" sx={{ mb: 0.5 }}>{children}</Typography>,
+                        ul: ({children}) => <Box component="ul" sx={{ pl: 2, mb: 1, maxWidth: '100%' }}>{children}</Box>,
+                        ol: ({children}) => <Box component="ol" sx={{ pl: 2, mb: 1, maxWidth: '100%' }}>{children}</Box>,
+                        li: ({children}) => <Typography component="li" sx={{ mb: 0.5, wordBreak: 'break-word' }}>{children}</Typography>,
                         blockquote: ({children}) => (
                           <Box
                             component="blockquote"
@@ -695,7 +701,10 @@ Format your response in proper Markdown. ${trimmedPrompt}`;
                               fontStyle: 'italic',
                               backgroundColor: '#f9f9f9',
                               py: 1,
-                              mb: 1
+                              mb: 1,
+                              maxWidth: '100%',
+                              wordBreak: 'break-word',
+                              whiteSpace: 'pre-wrap'
                             }}
                           >
                             {children}

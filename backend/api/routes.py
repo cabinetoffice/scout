@@ -578,6 +578,10 @@ async def custom_query(
         "knowledgeBaseId": str(knowledge_id)
     }
     
+    # Add promptTemplate to payload if provided
+    if request_data.prompt_template:
+        payload["promptTemplate"] = request_data.prompt_template
+    
     # Add chat_session_id to payload if it exists
     if request_data.chat_session_id and request_data.chat_session_id != uuid.UUID('00000000-0000-0000-0000-000000000000'):
         payload["sessionId"] = str(request_data.chat_session_id)
@@ -590,7 +594,7 @@ async def custom_query(
         # Run the blocking Lambda invocation in a thread pool
         response = await run_in_threadpool(
             lambda: client.invoke(
-                FunctionName='bd_base_query146',
+                FunctionName='bd_base_query147_prompt',
                 InvocationType='RequestResponse',
                 Payload=json.dumps(payload)
             )
@@ -616,7 +620,8 @@ async def custom_query(
                 db=db,
                 chat_session_id=chat_session_id,
                 model_id=model_id,
-                response=response_payload
+                response=response_payload,
+                custom_system_prompt=request_data.prompt_template
             ))
 
         # Add the chat_session_id to the response

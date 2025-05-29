@@ -16,7 +16,7 @@ export default async function handler(
           ? oidcData.join(",")
           : oidcData || "";
 
-        const { query, chat_session_id, model_id } = body;
+        const { query, chat_session_id, model_id, prompt_template } = body;
 
         const requestInit: RequestInit = {
           method: "POST",
@@ -27,7 +27,7 @@ export default async function handler(
             "x-amzn-oidc-data": formattedOidcData,
           },
           credentials: "include",
-          body: JSON.stringify({ query, chat_session_id, model_id }),
+          body: JSON.stringify({ query, chat_session_id, model_id, prompt_template }),
         };
 
         console.log(

@@ -63,8 +63,10 @@ from scout.utils.storage.postgres_models import File as FileTable
 from scout.utils.storage import postgres_interface as interface
 from scout.utils.storage.postgres_database import SessionLocal
 import os
+
 import boto3
 from botocore.exceptions import ClientError
+import jwt
 from starlette.concurrency import run_in_threadpool
 
 import asyncio
@@ -90,9 +92,6 @@ def get_settings():
 
 
 settings = get_settings()
-
-SECRET_KEY = settings.API_JWT_KEY
-ALGORITHM = "HS256"
 
 
 models = {
@@ -121,50 +120,66 @@ class TokenData(BaseModel):
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__) 
-    
-def extract_oidc_from_token(token: str) -> Optional[str]:
-    """Extract x_amzn_oidc_data from the JWT token."""
-    try:
-        parts = token.split(".")
-        if len(parts) != 3:
-            return None
-        
-        payload = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)  # Fix base64 padding
-        decoded = base64.urlsafe_b64decode(payload).decode("utf-8")
-        token_content = json.loads(decoded)
-        return json.dumps(token_content)  # Return raw OIDC data
-    except Exception as e:
-        logger.error(f"Failed to decode token: {e}")
-        return None
+
+
+@lru_cache
+def _get_public_key(kid: str):
+    url = "https://public-keys.auth.elb." + settings.AWS_REGION + '.amazonaws.com/' + kid
+    r = requests.get(url)
+    r.raise_for_status()
+    return r.text
+
 
 def get_current_user(
     request: Request,
-    x_amzn_oidc_data: Optional[str] = Header(None),
     authorization: Optional[str] = Header(None)
 ) -> Optional[PyUser]:
-    
+    """
+    This function retrieves the current user using a JWT token passed
+    in X-AMZN-OIDC-DATA header.
+    In production, this is inserted by the load balancer and verified against
+    its public key. Make sure that settings.AWS_LB_ARN is set to the ARN of
+    the load balancer for the verification to work.
+    Locally, you can generate a token using the JWT Encoder - https://www.jwt.io/
+    Set an email claim to the email of the user you want to be logged in as.
+    Set settings.API_JWT_SECRET to the secret that you provided to the encoder.
+    References:
+    * https://aws.amazon.com/blogs/networking-and-content-delivery/security-best-practices-when-using-alb-authentication/
+    * https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-authenticate-users.html
+    """
+
     logger.info(f"ENVIRONMENT: {settings.ENVIRONMENT}")
-    
-    if settings.ENVIRONMENT == "local":
-        # A JWT for local testing
-        authorization = f"Bearer {settings.API_JWT_KEY}"
+    logger.info(f"Path: {request.url.path}")
+    logger.info(f"Headers: {dict(request.headers)}")
 
-    """Extract user information from the OIDC token."""
-    # logger.info(f"Incoming Headers: {dict(request.headers)}")
-    # logger.info(f"x-amzn-oidc-data Header: {x_amzn_oidc_data}")
-    # logger.info(f"Authorization Header: {authorization}")
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
-    if not x_amzn_oidc_data and authorization and authorization.startswith("Bearer "):
-        token = authorization.split(" ")[1]
-        x_amzn_oidc_data = extract_oidc_from_token(token)
-        # logger.info(f"Extracted x-amzn-oidc-data from token: {x_amzn_oidc_data}")
-    
-    if not x_amzn_oidc_data:
-        raise HTTPException(status_code=401, detail="OIDC data not found in headers or token")
-    
+    token = authorization.removeprefix("Bearer ")
+    if authorization == token:
+        raise HTTPException(status_code=401, detail="Authentication method not supported")
+
     try:
-        token_data = json.loads(x_amzn_oidc_data)
-        email = token_data.get("email")
+        if settings.ENVIRONMENT == "local" and settings.API_JWT_SECRET is not None:
+            payload = jwt.decode(
+                token,
+                settings.API_JWT_SECRET,
+                algorithms=["HS256"]
+            )
+
+        else:
+            header = jwt.get_unverified_header(token)
+            if header["signer"] != settings.AWS_LB_ARN:
+                logger.error("Wrong OIDC signer: %s", header["signer"])
+                raise HTTPException(status_code=401, detail="Wrong OIDC signer")
+
+            payload = jwt.decode(
+                token,
+                _get_public_key(header["kid"]),
+                algorithms=["ES256"]
+            )
+
+        email = payload.get("email")
         if not email:
             raise HTTPException(status_code=401, detail="Email not found in token")
         

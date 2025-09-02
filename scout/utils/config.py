@@ -6,7 +6,7 @@ from pydantic_settings import SettingsConfigDict
 
 class Settings(BaseSettings):
     DOCKER_BUILDER_CONTAINER: str
-    API_JWT_KEY: str
+    API_JWT_SECRET: Optional[str] = None
     API_PORT: int = 8080
     APP_PORT: int = 3000
     APP_URL: str = ""
@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     AWS_ACCOUNT_ID: Optional[str] = None
     AWS_REGION: Optional[str] = None
     AWS_BEDROCK_MODEL_ID: str
+    AWS_LB_ARN: str
     BUCKET_NAME: str
     MINIO_ACCESS_KEY: Optional[str] = None
     MINIO_HOST: Optional[str] = None

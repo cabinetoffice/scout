@@ -231,7 +231,6 @@ class ProjectCreate(BaseModel):
 
 class ProjectUpdate(ProjectCreate):
     id: UUID
-    knowledgebase_id: Optional[str] = None
 
 
 class ProjectFilter(BaseModel):
@@ -368,7 +367,7 @@ class FileInfo(BaseModel):
         None,
         description="The origin of the file: IPA, project, department, or other",
     )
-    published_date: str = Field(
+    published_date: str | None = Field(
         None,
         description="The date when the file was published or last updated in DD-MM-YYYY format",
     )

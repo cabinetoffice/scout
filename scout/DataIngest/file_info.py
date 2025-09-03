@@ -35,9 +35,7 @@ def get_llm_file_info(project_name: str, file_name: str, text: str) -> FileInfo:
     
     # Extract structured metadata for file from natural language using Bedrock
     try:
-        # Create the messages for Claude/Anthropic model format
         messages = [
-            {"role": "system", "content": sys_prompt},
             {"role": "user", "content": text}
         ]
         
@@ -46,8 +44,8 @@ def get_llm_file_info(project_name: str, file_name: str, text: str) -> FileInfo:
         Return the output as valid JSON with the following structure:
         {
             "clean_name": "string",
-            "source": "Government | Supplier | Other",
             "summary": "string",
+            "source": "IPA | project | department | other",
             "published_date": "YYYY-MM-DD string or null"
         }
         """
@@ -57,11 +55,12 @@ def get_llm_file_info(project_name: str, file_name: str, text: str) -> FileInfo:
         
         # Make the API call to Bedrock with Claude
         response = bedrock_client.invoke_model(
-            modelId=os.getenv("AWS_BEDROCK_MODEL_ID"),
+            modelId="anthropic.claude-3-haiku-20240307-v1:0",
             body=json.dumps({
                 "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": 1000,
-                "messages": messages
+                "messages": messages,
+                "system": sys_prompt
             })
         )
         
@@ -103,7 +102,7 @@ def get_file_update(file: File, file_info: FileInfo) -> FileUpdate:
         s3_bucket=getattr(file, "s3_bucket", None),
         s3_key=getattr(file, "s3_key", None),
         storage_kind=getattr(file, "storage_kind", "local"),
-        project=getattr(file, "project", None),
+        project_id=getattr(file, "project_id", None),
         chunks=getattr(file, "chunks", []),
         id=file.id,
     )

@@ -42,10 +42,10 @@ services:
   minio:
     image: minio/minio
     expose:
-      - "${MINIO_PORT}"
+      - "${MINIO_PORT:-9000}"
       - "9001"
     ports:
-      - "${MINIO_PORT}:${MINIO_PORT}"
+      - "${MINIO_PORT:-9000}:${MINIO_PORT:-9000}"
       - "9001:9001"
     environment:
       - MINIO_ACCESS_KEY=minioadmin
@@ -81,9 +81,9 @@ services:
       - PUID=1000
       - PGID=1000
       - TZ=Etc/UTC
-      - AWS_ACCESS_KEY_ID=minioadmin
-      - AWS_SECRET_ACCESS_KEY=minioadmin
-      - S3_ENDPOINT=http://minio:9000
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-minioadmin}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-minioadmin}
+      - S3_ENDPOINT=${AWS_ENDPOINT_URL_S3:-http://minio:9000}
     volumes:
       - ./libreoffice_service/:/app
       - ./libreoffice_service/data:/data

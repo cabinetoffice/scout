@@ -607,7 +607,7 @@ def _update_file(model: FileUpdate, db: Session) -> PyFile | None:
     item.s3_bucket = model.s3_bucket
     item.s3_key = model.s3_key
     item.storage_kind = model.storage_kind
-    item.project_id = model.project.id if model.project else None
+    item.project_id = model.project_id
 
     # Don't update chunks relationship unless explicitly provided
     if model.chunks:

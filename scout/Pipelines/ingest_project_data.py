@@ -82,7 +82,8 @@ def ingest_project_files(
     vector_store: VectorStore,
     storage_handler: BaseStorageHandler = PostgresStorageHandler(),
     s3_storage_handler: S3StorageHandler = S3StorageHandler(),
-    chunking_partition_strategy: str = "fast",
+    chunking_partition_strategy: str = "auto",
+    project_name: str | None = None
 ) -> str:
     """
     Ingest all project files in a given folder. This converts files to PDF, uploads to S3 storage,
@@ -100,13 +101,17 @@ def ingest_project_files(
     Returns:
         Project name (as string)
     """
-    project_name = get_project_name_with_date_time(project_directory_name)
+    if project_name is None:
+        project_name = get_project_name_with_date_time(project_directory_name)
     print(f"project_name: {project_name}")
     project_folder_path = get_project_directory(project_directory_name)
     print(f"project_folder_path: {project_folder_path}")
 
     # Create project in DB
-    project = ProjectCreate(name=project_name)
+    project = ProjectCreate(
+        name=project_name,
+        knowledgebase_id=os.getenv("AWS_BEDROCK_KB_ID")
+    )
     project = storage_handler.write_item(project)
 
     # Upload files to s3

@@ -1,11 +1,10 @@
-import base64
 from datetime import datetime, timedelta
 import json
 import logging
 import typing
 import uuid
 from functools import lru_cache
-from typing import Annotated, List, Any
+from typing import List, Any
 from typing import Optional
 from uuid import UUID
 from sqlalchemy import select, and_, func
@@ -19,7 +18,6 @@ from fastapi import HTTPException
 from fastapi import Query
 from fastapi import Request
 from fastapi.responses import Response
-from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from backend.utils.associate_user_project_request import AssociateUserToProjectRequest
@@ -49,9 +47,7 @@ from scout.DataIngest.models.schemas import (
     AuditLog as PyAuditLog,
     RoleEnum,
     RoleFilter,
-    Role as PyRole,
     # Add these new imports for chat sessions
-    ChatSession as PyChatSession,
     ChatSessionCreate,
     ChatSessionUpdate,
 )
@@ -365,83 +361,6 @@ def read_items_by_attribute(
         items = interface.filter_items(filter)
     return items
 
-
-@router.get("/get_file/{uuid}")
-def get_file(
-    uuid: UUID,
-    current_user: PyUser = Depends(get_current_user),
-):
-    try:
-        file = interface.get_by_id(PyFile, uuid)
-        if not file:
-            raise HTTPException(status_code=404, detail="File not found")
-
-        file_extension = file.s3_key.split(".")[-1].lower()
-
-        if file_extension == "pdf":
-            file_type = "application/pdf"
-        else:
-            raise HTTPException(status_code=400, detail=f"Unsupported file type: {file_extension}")
-        # Replace this file.url with a pre-signed url from a s3 bucket to test with remote files
-        file_response = requests.get(file.url)
-        file_response.raise_for_status()
-        file_content = file_response.content
-        return Response(
-            content=file_content,
-            media_type=file_type,
-            headers={
-                "Content-Disposition": f"attachment; filename={file.s3_key.split('/')[-1]}",
-                "X-File-Type": file_type,
-            },
-        )
-
-    except Exception as e:
-        logger.exception("An error occurred while retrieving the file")
-        raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred while retrieving the file: {str(e)}",
-        )
-
-@router.get("/get_file_by_key/{key}")
-def get_file_by_key(
-    key: str,
-    current_user: PyUser = Depends(get_current_user),
-):
-    try:
-        # Find the file in the database by its S3 key
-        file = interface.filter_items(FileFilter(s3_key=key), current_user)
-        if not file or len(file) == 0:
-            raise HTTPException(status_code=404, detail="File not found")
-
-        file = file[0]  # Get the first matching file
-        file_extension = file.s3_key.split(".")[-1].lower()
-
-        # Determine the file type
-        if file_extension == "pdf":
-            file_type = "application/pdf"
-        else:
-            raise HTTPException(status_code=400, detail=f"Unsupported file type: {file_extension}")
-
-        # Fetch the file content from the S3 URL
-        file_response = requests.get(file.url)
-        file_response.raise_for_status()
-        file_content = file_response.content
-
-        return Response(
-            content=file_content,
-            media_type=file_type,
-            headers={
-                "Content-Disposition": f"attachment; filename={file.s3_key.split('/')[-1]}",
-                "X-File-Type": file_type,
-            },
-        )
-
-    except Exception as e:
-        logger.exception("An error occurred while retrieving the file by key")
-        raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred while retrieving the file: {str(e)}",
-        )
 
 @router.post("/rate")
 def rate_response(

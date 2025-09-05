@@ -6,14 +6,24 @@ export default async function handler(
     res: NextApiResponse
 ): Promise<void> {
     const {
-        query: { key },
         method,
         headers
     } = req
+    const { key } = req.query
 
     switch (method) {
         case 'GET':
             try {
+                let keyPath: string;
+                if (key === undefined) {
+                    res.status(404);
+                    break;
+                }
+                else if (typeof key == "string")
+                    keyPath = key;
+                else
+                    keyPath = key.join("/");
+
                 // Extract the OIDC data from the request headers
                 const oidcData = headers?.['x-amzn-oidc-data'];
                 const formattedOidcData = Array.isArray(oidcData) 
@@ -31,7 +41,7 @@ export default async function handler(
                     credentials: "include"
                 }
 
-                const response = await fetch(`${process.env.BACKEND_HOST}/api/get_file_by_key/${key}`, requestInit);
+                const response = await fetch(`${process.env.BACKEND_HOST}/api/get_file_by_key/${keyPath}`, requestInit);
                 
                 if (!response.ok) {
                     throw new Error('Failed to get item by key');

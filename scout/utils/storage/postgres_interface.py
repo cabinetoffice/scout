@@ -879,8 +879,8 @@ def _filter_project(model: ProjectFilter, db: Session, current_user: PyUser) -> 
    
     # If the current user is not an admin, filter by projects associated with the user
     if current_user.role.name != RoleEnum.ADMIN:
-        user_project_ids = [project.id for project in current_user.projects]
-        query = query.filter(SqProject.id.in_(user_project_ids))
+       user_project_ids = [project.id for project in current_user.projects]
+       query = query.filter(SqProject.id.in_(user_project_ids))
         
     if model.name:
         query = query.filter(SqProject.name.ilike(f"%{model.name}%"))

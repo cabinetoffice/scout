@@ -2,19 +2,14 @@ import csv
 import os
 from typing import List
 
-from scout.DataIngest.models.schemas import CriterionCreate as Criterion
-from scout.DataIngest.models.schemas import Chunk, ChunkCreate, CriterionCreate, CriterionGate, FileCreate, ProjectCreate
-from scout.utils.storage.storage_handler import BaseStorageHandler
-from scout.utils.utils import logger
-
-
 import boto3
-from botocore.config import Config
 from botocore.exceptions import NoCredentialsError
 from fastapi import HTTPException
 
+from scout.DataIngest.models.schemas import CriterionCreate as Criterion
 from scout.utils.storage.postgres_storage_handler import PostgresStorageHandler
-
+from scout.utils.storage.storage_handler import BaseStorageHandler
+from scout.utils.utils import logger
 
 header_mapping = {
     "Category": "category",

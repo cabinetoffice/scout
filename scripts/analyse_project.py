@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 This script evaluates documents stored in an AWS Bedrock Knowledge Base against 
 specified criteria using an LLM, without first ingesting them into the Scout system.
@@ -9,44 +10,39 @@ AWS Bedrock Knowledge Base while still using Scout for assessment.
 See the project README for instructions on how to run.
 """
 
-import datetime
+import argparse
 import os
-import json
-import uuid
+import sys
+import typing
+
 import boto3
 from botocore.client import Config
-
 from dotenv import load_dotenv
-from typing import List, Dict, Any
-
 from langchain_aws import ChatBedrock
 from langchain_community.retrievers import AmazonKnowledgeBasesRetriever
 
-from scout.DataIngest.models.schemas import Chunk, ChunkCreate, CriterionGate, FileCreate, ProjectCreate
-from scout.Pipelines.ingest_criteria import ingest_criteria_from_local_dir
+from scout.DataIngest.models.schemas import (
+    CriterionFilter,
+    CriterionGate, ChunkCreate,
+)
+from scout.utils.storage.postgres_models import File
+from scout.DataIngest.models.schemas import Project, ProjectFilter
 from scout.LLMFlag.evaluation import MainEvaluator
-from scout.utils.storage.postgres_storage_handler import PostgresStorageHandler
+from scout.LLMFlag.prompts import DOCUMENT_EXTRACTS_HEADER, DOCUMENT_EXTRACT_PROMPT
+from scout.utils.storage.postgres_interface import SessionManager
 from scout.utils.utils import logger
 
-from scout.DataIngest.models.schemas import (
-    Criterion,
-    CriterionCreate,
-    CriterionFilter,
-    CriterionGate,
-    ProjectCreate,
-    ProjectFilter,
-    ResultCreate,
-)
+if typing.TYPE_CHECKING:
+    from scout.utils.storage.postgres_storage_handler import PostgresStorageHandler
+
 
 load_dotenv()
 
 
 def evaluate_kb_against_criteria(
-    kb_id: str,
-    project_name: str,
+    project: Project,
     gate_review: CriterionGate,
-    storage_handler: PostgresStorageHandler,
-    criteria_csv_list: List[str],
+    storage_handler: "PostgresStorageHandler",
     region_name: str = None,
     model_id: str = os.getenv("AWS_BEDROCK_MODEL_ID"),
     max_results: int = 5
@@ -55,11 +51,9 @@ def evaluate_kb_against_criteria(
     Evaluate an AWS Bedrock Knowledge Base against criteria using LangChain's AmazonKnowledgeBasesRetriever
 
     Args:
-        kb_id: AWS Bedrock Knowledge Base ID
         project_name: Name to use for the project in the database
         gate_review: Gate review type (e.g., GATE_2, GATE_3)
         storage_handler: Database storage handler
-        criteria_csv_list: List of CSV files containing criteria
         region_name: AWS region name (defaults to session region)
         model_id: AWS Bedrock model ID to use
         max_results: Maximum number of results to return per query
@@ -69,7 +63,10 @@ def evaluate_kb_against_criteria(
     region = region_name or session.region_name
 
     bedrock_config = Config(
-        connect_timeout=120, read_timeout=120, retries={'max_attempts': 0}
+        connect_timeout=120,
+        read_timeout=120,
+        retries={'max_attempts': 5},
+        max_pool_connections=20
     )
     bedrock_client = boto3.client(
         'bedrock-runtime', region_name=region, config=bedrock_config)
@@ -82,7 +79,7 @@ def evaluate_kb_against_criteria(
 
     # Initialize the AmazonKnowledgeBasesRetriever
     retriever = AmazonKnowledgeBasesRetriever(
-        knowledge_base_id=kb_id,
+        knowledge_base_id=project.knowledgebase_id,
         retrieval_config={
             "vectorSearchConfiguration": {
                 "numberOfResults": max_results,
@@ -90,18 +87,6 @@ def evaluate_kb_against_criteria(
             }
         },
     )
-
-    # Ingest criteria from CSVs
-    ingest_criteria_from_local_dir(
-        gate_filepaths=criteria_csv_list, storage_handler=storage_handler)
-    logger.info("Criteria ingested")
-
-    # Create project in database
-    project = ProjectCreate(
-        name=project_name
-    )
-    project = storage_handler.write_item(project)
-    logger.info(f"Created project: {project.name}")
 
     # Get criteria for gate
     filter = CriterionFilter(gate=gate_review)
@@ -115,11 +100,10 @@ def evaluate_kb_against_criteria(
             documents = retriever.get_relevant_documents(query)
 
             # Format into expected prompt structure
-            prompt = "Document extracts relevant to the query:\n\n"
+            prompt = DOCUMENT_EXTRACTS_HEADER
             formatted_docs = []
 
             for i, doc in enumerate(documents):
-
                 # Extract source_metadata dictionary
                 source_metadata = doc.metadata.get('source_metadata', {})
                 source_uri = source_metadata.get('x-amz-bedrock-kb-source-uri')
@@ -131,25 +115,14 @@ def evaluate_kb_against_criteria(
                     print("S3 bucket or key not found in metadata.")
                     return None
 
-                file_name = object_key.split("/")[-1]
-
-                file_create = FileCreate(
-                    name=file_name,
-                    s3_key=object_key,
-                    type=os.path.splitext(file_name)[1],
-                    project=project,
-                    s3_bucket=os.environ["BUCKET_NAME"],
-                )
-                file = self.storage_handler.write_item(file_create)
-
-                chunk = ChunkCreate(
-                    file=file,
-                    idx=0,
-                    text=object_key,
-                    page_num=0,
-                )
-
-                created_chunk = self.storage_handler.write_item(chunk)
+                with SessionManager() as db:
+                    query = db.query(File)
+                    query = query.filter(
+                        File.s3_bucket == bucket_name,
+                        File.s3_key == object_key,
+                        File.project_id == project.id
+                    )
+                    file = query.one()
 
                 source = doc.metadata.get('source', 'Unknown')
                 content = doc.page_content
@@ -157,14 +130,27 @@ def evaluate_kb_against_criteria(
                 # Create document ID from source or use a default
                 doc_id = source.split('/')[-1] if source else f"document_{i+1}"
 
-                prompt += f"Document {i+1}: {doc_id}\n"
-                prompt += f"Content: {content}\n\n"
+                prompt += DOCUMENT_EXTRACT_PROMPT.format(
+                    file_name=getattr(file, "clean_name", file.name),
+                    source=getattr(file, "source", None),
+                    summary=getattr(file, "summary", None),
+                    date=getattr(file, "published_date", None),
+                    text=doc.page_content,
+                )
+
+                chunk = ChunkCreate(
+                    file=file,
+                    idx=0,
+                    text=doc.page_content,
+                    page_num=source_metadata.get("x-amz-bedrock-kb-document-page-number", 0)
+                )
+                created_chunk = self.storage_handler.write_item(chunk)
 
                 # Format documents for return value
                 formatted_docs.append({
                     'content': content,
                     'metadata': {
-                        'uuid': created_chunk.id,  # str(uuid.uuid4()),
+                        'uuid': created_chunk.id,
                         'source': source,
                         'document_id': doc_id,
                         'score': doc.metadata.get('score', 0),
@@ -198,27 +184,41 @@ def evaluate_kb_against_criteria(
     storage_handler.update_item(project)
     logger.info("Evaluation complete")
 
-
 if __name__ == "__main__":
-    # These are your settings
-    kb_id = os.getenv("AWS_BEDROCK_KB_ID", "")  # AWS Bedrock Knowledge Base ID
-    project_name = "bedrock_kb_project" + "-" + \
-        datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    parser = argparse.ArgumentParser(
+        prog="analyse_project",
+        description="Analyse a project according to NISTA criteria.",
+    )
 
-    gate_review = CriterionGate.GATE_3  # Criteria to review against
-    criteria_csv_list = [
-        ".data/criteria/example_2.csv",
-        ".data/criteria/example_3.csv",
-    ]
+    parser.add_argument(
+        "project_name",
+        help="The name of the project in the Scout database. "
+        "This must have been created during the ingestion by ingest_project.py script."
+    )
+    parser.add_argument(
+        "-g", "--gate-review",
+        help="The set of criteria to review against. " +
+             f"Correct values: {', '.join(CriterionGate.__members__)}.",
+        type=CriterionGate,
+        default=CriterionGate.GATE_3
+    )
+
+    args = parser.parse_args()
 
     # Initialize database handler
+    from scout.utils.storage.postgres_storage_handler import PostgresStorageHandler
     storage_handler = PostgresStorageHandler()
+
+    # Get the project
+    project_filter = ProjectFilter(name=args.project_name)
+    project_list = storage_handler.get_item_by_attribute(project_filter)
+    if not project_list:
+        print(f"Project {args.project_name} was not found.", file=sys.stderr)
+        sys.exit(1)
 
     # Run evaluation
     evaluate_kb_against_criteria(
-        kb_id=kb_id,
-        project_name=project_name,
-        gate_review=gate_review,
-        storage_handler=storage_handler,
-        criteria_csv_list=criteria_csv_list
+        project=project_list[0],
+        gate_review=args.gate_review,
+        storage_handler=storage_handler
     )

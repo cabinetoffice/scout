@@ -124,7 +124,7 @@ def ingest_project_files(
 
     # send files to libreoffice service and convert to pdf.
     logger.info(f"Converting {s3_file_keys} files to pdf")
-    s3_converted_file_keys = convert_to_pdf_from_s3(s3_file_keys)
+    s3_converted_file_keys = convert_to_pdf_from_s3(s3_file_keys, s3_storage_handler)
     logger.info(f"Converted {s3_converted_file_keys} files to pdf")
 
     # Get presigned urls for these files - save file info to DB and files to temp for chunking

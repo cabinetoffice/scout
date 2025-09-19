@@ -59,13 +59,13 @@ if __name__ == "__main__":
         )
         sys.exit(2)
 
-    """store = scout.Pipelines.utils.get_or_create_vector_store(
+    store = scout.Pipelines.utils.get_or_create_vector_store(
         project_path / "VectorStore"
     )
     scout.Pipelines.ingest_project_data.ingest_project_files(
         project_name,
         store
-    )"""
+    )
 
     knowledge_base_id = os.environ["AWS_BEDROCK_KB_ID"]
     response = bedrock_agent.list_data_sources(

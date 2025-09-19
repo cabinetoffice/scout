@@ -4,8 +4,10 @@ from urllib.parse import ParseResult, unquote, urlparse
 
 import requests
 
+from scout.utils.storage import S3StorageHandler
 
-def convert_to_pdf_from_s3(s3_file_keys: list[str]) -> list[str]:
+
+def convert_to_pdf_from_s3(s3_file_keys: list[str], s3_storage_handler: S3StorageHandler) -> list[str]:
     # keys of converted files in s3.
     s3_converted_file_keys = []
 
@@ -14,6 +16,9 @@ def convert_to_pdf_from_s3(s3_file_keys: list[str]) -> list[str]:
         response = requests.post(f"{os.getenv('LIBREOFFICE_SERVICE_URL')}/convert", json={"input_key": s3_file_key})
         assert response.status_code == 200, f"Failed to convert file {s3_file_key}"
         s3_converted_file_keys.append(response.json()["output_key"])
+
+        # Remove the raw file
+        s3_storage_handler.s3_client.delete_object(Bucket=s3_storage_handler.bucket_name, Key=s3_file_key)
 
     return s3_converted_file_keys
 

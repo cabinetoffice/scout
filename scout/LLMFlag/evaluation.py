@@ -1,4 +1,5 @@
 import os
+import concurrent.futures
 import json
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Dict, Any
@@ -271,16 +272,43 @@ class MainEvaluator(BaseEvaluator):
 
     def evaluate_questions(self, criteria: List[CriterionCreate], k: int = 3, save: bool = True) -> List[ResultCreate]:
         """Get answers to a list of questions"""
-        results = []
-        question_answer_pairs = []
+        max_concurrent = 20
+
+        results = [None] * len(criteria)
+        question_answer_pairs = [None] * len(criteria)
+        complete = 0
+
+        def evaluate(idx):
+            nonlocal complete
+            criterion = criteria[idx]
+            try:
+                result = self.evaluate_question(criterion, k, save)
+                complete += 1
+                if complete % 5 == 0:
+                    logger.info(f"{complete} criteria complete")
+                return idx, result, (criterion.question, result.full_text)
+            except Exception as e:
+                logger.error(f"Error processing criterion {idx} ({criterion.question}): {e}")
+                return idx, None, None
+
         logger.info("Evaluating questions...")
-        for idx, criterion in enumerate(criteria):
-            result = self.evaluate_question(criterion, k, save)
-            results.append(result)
-            question_answer_pairs.append(
-                (criterion.question, result.full_text))
-            if idx % 5 == 0:
-                logger.info(f"{idx} criteria complete")
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_concurrent) as executor:
+            futures = [
+                executor.submit(evaluate, idx)
+                for idx in range(len(criteria))
+            ]
+
+            # Collect results as they complete
+            for future in concurrent.futures.as_completed(futures):
+                idx, result, qa_pair = future.result()
+                if result is not None:
+                    results[idx] = result
+                    question_answer_pairs[idx] = qa_pair
+
+        if None in results:
+            print(f"{result.count(None)} criteria failed to evaluate. Aborting.")
+
         logger.info("Generating summary of answers...")
         # Generate summary of answers
         summary = self.generate_summary(question_answer_pairs)
